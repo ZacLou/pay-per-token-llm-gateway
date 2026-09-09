@@ -26,6 +26,8 @@ export interface EscrowChargeOptions {
   contractId: string;
   rpcUrl: string;
   networkPassphrase: string;
+  /** RPC timeout in seconds (passed to the stellar-sdk contract client). */
+  timeoutSeconds?: number;
   /** Secret key of the contract admin (signs the invocation). */
   adminSecret: string;
   /** Stellar address of the user whose escrow balance to charge. */
@@ -40,6 +42,8 @@ export interface EscrowRefundOptions {
   contractId: string;
   rpcUrl: string;
   networkPassphrase: string;
+  /** RPC timeout in seconds (passed to the stellar-sdk contract client). */
+  timeoutSeconds?: number;
   adminSecret: string;
   user: string;
   /** Amount to refund in stroops (the surplus). */
@@ -119,7 +123,18 @@ export async function chargeEscrow(options: EscrowChargeOptions): Promise<Escrow
 
   try {
     const adminKeypair = Keypair.fromSecret(adminSecret);
-    const client: any = await buildEscrowClient({ contractId, rpcUrl, networkPassphrase });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { contract } = await import('@stellar/stellar-sdk');
+    const { Client } = contract;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client: any = await Client.from({
+      contractId,
+      rpcUrl,
+      networkPassphrase,
+      ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tx: any = await client.charge({
@@ -162,7 +177,18 @@ export async function refundEscrow(options: EscrowRefundOptions): Promise<Escrow
 
   try {
     const adminKeypair = Keypair.fromSecret(adminSecret);
-    const client: any = await buildEscrowClient({ contractId, rpcUrl, networkPassphrase });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { contract } = await import('@stellar/stellar-sdk');
+    const { Client } = contract;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client: any = await Client.from({
+      contractId,
+      rpcUrl,
+      networkPassphrase,
+      ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tx: any = await client.refund({
