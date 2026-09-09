@@ -33,6 +33,10 @@ export default function RoutesContent() {
         default:
           errorMessage = error.message;
       }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    } else {
+      errorMessage = 'An unknown error occurred';
     }
 
     const handleAction = () => {
