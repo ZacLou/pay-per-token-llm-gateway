@@ -17,7 +17,8 @@ export default function RoutesContent() {
     let redirect = false;
 
     if (error instanceof ApiError) {
-      switch (error.status) {
+      const status = Number(error.status); // Ensure status is treated as a number
+      switch (status) {
         case 401:
           errorMessage = 'Session expired. Please re-authenticate.';
           actionLabel = 'Login';
