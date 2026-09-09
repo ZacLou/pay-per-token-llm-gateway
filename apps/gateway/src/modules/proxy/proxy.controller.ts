@@ -534,6 +534,23 @@ export class ProxyController {
 
     res.setHeader('X-Request-Trace-Id', traceId);
 
+    if (payment) {
+      res.setHeader(
+        'X-Payment-Receipt',
+        JSON.stringify({
+          id: payment.id,
+          quoteId: payment.quoteId,
+          txHash: payment.txHash,
+          payerAddress: payment.payerAddress,
+          amount: payment.amount?.toString(),
+          asset: payment.asset,
+          status: payment.status,
+          actualCost: payment.amount?.toString() || '0',
+          tokensUsed: null,
+        }),
+      );
+    }
+
     // Pipe upstream SSE stream to client; extract tokens for per-token pricing
     await this.proxyService.forwardStreamRequest(
       body,
@@ -740,6 +757,23 @@ export class ProxyController {
     // Record actual cost on the payment
     if (payment) {
       await this.paymentsService.recordActualCost(payment.quoteId, actualCost, tokensUsed);
+      
+      // If this was a streaming request using escrow, we charge the exact amount now
+      if (payment.txHash && payment.txHash.startsWith('escrow:')) {
+        const config = getConfig();
+        if (config.payment.contractAdminSecret) {
+          logger.info(`Charging exact streaming amount from escrow: ${actualCost}`);
+          await chargeEscrowOnChain({
+            contractId: config.contracts.creditEscrow,
+            rpcUrl: config.stellar.sorobanRpcUrl,
+            networkPassphrase: config.stellar.networkPassphrase,
+            adminSecret: config.payment.contractAdminSecret,
+            payer: payment.payerAddress,
+            amount: actualCost,
+            quoteId: payment.quoteId,
+          });
+        }
+      }
     }
 
     logger.info('Per-token cost calculated', {

@@ -49,6 +49,7 @@ export class X402Service {
       usdcIssuer: config.payment.usdcIssuer,
       minPaymentAmount: config.payment.minPaymentAmount,
       estimatedTokens,
+      minPaymentAmount: config.payment.minPaymentAmount,
     });
 
     this.metrics.safe(() =>

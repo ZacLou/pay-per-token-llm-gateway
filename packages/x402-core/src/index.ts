@@ -29,6 +29,8 @@ export interface QuoteGeneratorOptions {
   minPaymentAmount?: string;
   /** Estimated max tokens for per-token pricing (from request max_tokens) */
   estimatedTokens?: number;
+  /** Minimum payment amount (stroops) */
+  minPaymentAmount?: string;
 }
 
 /** Default token estimate when max_tokens is not specified */
