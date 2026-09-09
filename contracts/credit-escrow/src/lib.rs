@@ -393,6 +393,12 @@ impl CreditEscrow {
 // ── Tests ────────────────────────────────────
 
 #[cfg(test)]
+mod bench;
+
+#[cfg(test)]
+mod property;
+
+#[cfg(test)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::storage::Instance as _;

@@ -4,6 +4,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../app.module';
 import { HttpExceptionFilter } from '../common/filters/http-exception.filter';
+import { createTraceContextMiddleware } from '../common/trace-context.middleware';
 
 // The proxy re-validates upstream DNS at request time (SSRF/rebinding
 // guard). The e2e suite's mocked upstream (api.mock-llm.example.com) does
@@ -245,6 +246,18 @@ jest.mock('@x402/database', () => ({
 
 const mockPrisma = jest.requireMock('@x402/database').prisma as any;
 
+// ── Mock escrow settlement ─────────────────────
+// The controller calls settleEscrow() after every metered response; the e2e
+// mocks the module so settlement never touches a network, and records calls
+// so scenarios can assert the settlement wiring (charge + refund flow).
+const mockSettleEscrow = jest.fn().mockResolvedValue(undefined);
+
+jest.mock('../modules/x402/escrow-client', () => ({
+  settleEscrow: (...args: any[]) => mockSettleEscrow(...args),
+  chargeEscrow: jest.fn().mockResolvedValue({ success: true }),
+  refundEscrow: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 // ── Mock webhook dispatcher ────────────────────
 
 const mockDispatch = jest.fn().mockResolvedValue(['email']);
@@ -382,6 +395,7 @@ describe('x402 Gateway E2E — Core Flow', () => {
       .compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    app.use(createTraceContextMiddleware());
     app.useGlobalFilters(new HttpExceptionFilter());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
@@ -397,6 +411,22 @@ describe('x402 Gateway E2E — Core Flow', () => {
     resetMockStore();
     jest.clearAllMocks();
     global.fetch = createHorizonAndLLMFetch() as any;
+  });
+
+  it('propagates W3C trace context across the request path', async () => {
+    // A caller-provided traceparent is continued (same trace id) on the
+    // response, and the legacy X-Request-Trace-Id header matches.
+    const traceId = 'cafebabe'.repeat(4); // 32 hex chars
+    const incoming = `00-${traceId}-${'1'.repeat(16)}-01`;
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/chat/completions')
+      .set('traceparent', incoming)
+      .send({ model: 'gpt-4', messages: [{ role: 'user', content: 'trace' }] })
+      .expect(402);
+
+    expect(res.headers['traceparent']).toMatch(new RegExp(`^00-${traceId}-[a-f0-9]{16}-01$`));
+    expect(res.headers['x-request-trace-id']).toBe(traceId);
   });
 
   it('returns 402 with quote when no payment header', async () => {
@@ -814,6 +844,96 @@ describe('x402 Gateway E2E — Per-Token Metered Pricing', () => {
 
       expect(res.headers['x-surplus']).toBeDefined();
       expect(parseInt(res.headers['x-surplus'])).toBeGreaterThan(0);
+    } finally {
+      global.fetch = orig;
+    }
+  });
+
+  it('wires escrow settlement after a metered response (charge + refund path)', async () => {
+    // A paid per-token request whose deposit exceeds the actual metered cost
+    // must trigger the escrow settlement wiring: charge the actual cost and
+    // refund the surplus. The contract client is mocked — this scenario
+    // proves the gateway calls settleEscrow with the right arguments after
+    // every metered response.
+    await request(app.getHttpServer())
+      .post('/api/v1/chat/completions')
+      .send({ model: 'gpt-4-per-token', messages: [{ role: 'user', content: 'Settle' }] })
+      .expect(402);
+
+    const settleHash = '77' + 'e'.repeat(62);
+    const orig = global.fetch;
+    global.fetch = jest.fn().mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('/transactions/') && !u.includes('/operations')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: settleHash,
+            successful: true,
+            source_account: PAYER,
+            ledger: 12345,
+            created_at: new Date().toISOString(),
+          }),
+        };
+      }
+      if (u.includes('/operations')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            _embedded: {
+              records: [
+                {
+                  type: 'payment',
+                  from: PAYER,
+                  to: PW2,
+                  amount: '0.2100000',
+                  asset_code: 'USDC',
+                  asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+                  asset_type: 'credit_alphanum4',
+                },
+              ],
+            },
+          }),
+        };
+      }
+      if (u.includes('mock-llm')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'chatcmpl-settle',
+            object: 'chat.completion',
+            model: 'gpt-4-per-token',
+            choices: [
+              { index: 0, message: { role: 'assistant', content: 'S' }, finish_reason: 'stop' },
+            ],
+            usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 },
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    mockSettleEscrow.mockClear();
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/chat/completions')
+        .set('X-Payment-Hash', settleHash)
+        .send({ model: 'gpt-4-per-token', messages: [{ role: 'user', content: 'Settle' }] })
+        .expect(200);
+
+      // The response is delivered with the cost headers as usual…
+      expect(res.headers['x-actual-cost']).toBeDefined();
+
+      // …and the settlement wiring fired with the payer address and the
+      // actual metered cost (200 stroops = 4 tokens × 50 stroops).
+      expect(mockSettleEscrow).toHaveBeenCalledTimes(1);
+      const call = mockSettleEscrow.mock.calls[0][0];
+      expect(call.user).toBe(PAYER);
+      expect(call.enabled).toBe(false); // flag is off in the e2e default env
+      expect(Number(call.actualCost)).toBeGreaterThan(0);
     } finally {
       global.fetch = orig;
     }

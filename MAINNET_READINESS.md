@@ -7,19 +7,19 @@
 > _any_ service well; this one is about the Stellar/chain-specific risks that
 > determine whether real USDC can flow through the system safely.
 >
-> Last updated: **2026-09-04** · Applies to commit `c769a99`.
+> Last updated: **2026-09-08** (post audit-and-hardening pass) · Applies to
+> commit `bf2bdd8` + the 2026-09-08 hardening commit.
 
 ---
 
-## 1. Audit status
+## 1. Audit status| Item | Status |
 
-| Item                             | Status                                                                                                                                                                                                                         |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Third-party smart-contract audit | **Not completed.** No external audit firm has reviewed the Soroban contracts or the gateway.                                                                                                                                   |
-| Self-audit                       | `AUDIT.md` (generated 2026-08-11) is an automated self-audit. Findings it raised that were actionable have since been fixed and are reflected in this repo (see §6).                                                           |
-| Test coverage (contracts)        | payment-verifier **23** · credit-escrow **43** · multisig **32** unit tests, all passing under `cargo test` (Rust 1.98 / soroban-sdk 22). Hand-written edge cases only — no property/fuzz/invariant suite, no external review. |
-| Test coverage (gateway)          | Unit suites green with coverage; gateway e2e 33/33.                                                                                                                                                                            |
-| Disclosure policy                | `SECURITY.md` exists but discloses **no known risks or out-of-scope items** — it reads as aspirational. It should be updated to name real residual risks (this doc is a starting point).                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Third-party smart-contract audit | **Not completed.** No external audit firm has reviewed the Soroban contracts or the gateway. |
+| Self-audit | `AUDIT.md` (2026-08-11) + a fresh audit-and-hardening pass on **2026-09-08**: quote-window integrity (`issuedAt`), Horizon/Soroban fetch timeouts, request-size bounds, readiness endpoints, Prometheus metrics, dependency overrides (0 critical), CI secret/container/lockfile scans, non-root Docker images, streaming backpressure. |
+| Test coverage (contracts) | payment-verifier **29** · credit-escrow **46** · multisig **36** tests under `cargo test` — hand-written edge cases PLUS **deterministic property-based suites** (`src/property.rs` per contract: pagination window math, replay-set semantics, escrow accounting walk, multisig quorum ordering; seeded PRNG, no external fuzz runner). Gas/storage benchmarks **executed and CI-gated** (`src/bench.rs`, ledger in `GAS-OPTIMIZATION.md` §5.5). No external review. |
+| Test coverage (gateway) | Unit suites green with coverage gates (gateway 127 unit + 34 e2e; x402-core 66 incl. deterministic property-based tests; validation 25; sdk 15). |
+| Disclosure policy | `SECURITY.md` now lists concrete residual risks (§"Known Residual Risks") and the CI scanning pipeline. |
 
 **Go/no-go implication:** a mainnet launch with real USDC before an
 independent audit of the three contracts is a _trust decision_, not a
@@ -146,16 +146,21 @@ reserves and alert on admin-key balance.
 These come from the self-audit and the Phase 2 hardening work; each is either
 done or an explicit decision point:
 
-| Item                                                                                           | Status                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_DEV_MODE=true` + `NODE_ENV=production` boot refusal                                      | ✅ Done (`packages/config` guard + tests). The old any-wallet `dev-sig-` bypass can no longer reach production.                                                                                                                                                                    |
-| Per-token underpayment enforcement (deposit + outstanding-debt top-up gate, completion cap)    | ✅ Done. New `UnderpaymentDebt` Prisma model — **requires `pnpm db:push`** (repo has no migration files) before the debt-gate queries run against a real DB.                                                                                                                       |
-| Soroban contracts migrated to **persistent storage** (per-entry ledger entries, per-entry TTL) | ✅ Done, commit `c769a99`. **This changed the storage layout — mainnet MUST deploy the new WASM.** There is no mainnet state, so this is a clean redeploy, not a migration.                                                                                                        |
-| Per-entry TTL policy                                                                           | ⚠️ Deliberate tradeoff: an untouched record needs a paid restore-from-archive read after `LEDGERS_TO_LIVE` ledgers. Fine for an audit trail; document for operators.                                                                                                               |
-| Credit-escrow settlement                                                                       | ⚠️ Opt-in, **experimental**, fire-and-forget (no enforcement without the account model). Keep disabled for mainnet v1 or make it a product decision (open issue #25).                                                                                                              |
-| Email notifications (SMTP)                                                                     | ✅ Removed — the handler was never registered, its SMTP config was inert, and no recipient model existed. `EmailNotificationHandler`, the `EMAIL_*`/`SMTP_*` config, and the nodemailer dependency were deleted. Re-add with a proper per-recipient model if email is ever wanted. |
-| Rate limiting                                                                                  | IP-only today (self-audit M7). The README/SECURITY claim of "by IP or wallet" overstates it. Acceptable for v1 with documented limits, or add wallet-based limiting.                                                                                                               |
-| External audit                                                                                 | ❌ Not done (see §1).                                                                                                                                                                                                                                                              |
+| Item                                                                                           | Status                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_DEV_MODE=true` + `NODE_ENV=production` boot refusal                                      | ✅ Done (`packages/config` guard + tests). The old any-wallet `dev-sig-` bypass can no longer reach production.                                                                                                                                                                                                                                                                                                                    |
+| Per-token underpayment enforcement (deposit + outstanding-debt top-up gate, completion cap)    | ✅ Done. New `UnderpaymentDebt` Prisma model + **migration** (`20260909000000_add_underpayment_debt_drop_legacy`), so `prisma migrate deploy` on a fresh database produces the complete schema — verified on every CI run by the backup/restore drill (`scripts/backup-restore-drill.sh`, job `backup-restore`).                                                                                                                   |
+| Soroban contracts migrated to **persistent storage** (per-entry ledger entries, per-entry TTL) | ✅ Done, commit `c769a99`. **This changed the storage layout — mainnet MUST deploy the new WASM.** There is no mainnet state, so this is a clean redeploy, not a migration.                                                                                                                                                                                                                                                        |
+| Per-entry TTL policy                                                                           | ⚠️ Deliberate tradeoff: an untouched record needs a paid restore-from-archive read after `LEDGERS_TO_LIVE` ledgers. Fine for an audit trail; document for operators.                                                                                                                                                                                                                                                               |
+| Credit-escrow settlement                                                                       | ⚠️ Opt-in (default `false`), fire-and-forget by design, gated on `ESCROW_SETTLEMENT_ENABLED` + `CONTRACT_ADMIN_SECRET`; per-token routes warn when disabled. Implemented + unit/e2e tested (#25). Keep disabled for mainnet v1 or make it a product decision.                                                                                                                                                                      |
+| Provider payout automation (multisig)                                                          | ✅ Implemented (#40): `multisig-client` + `PayoutProposal` model/migration + admin endpoints (`POST /admin/payouts/propose`, `GET /admin/payouts`, `POST /admin/payouts/:id/approve`), gated on `PAYOUT_AUTOMATION_ENABLED` (default `false`) + `CONTRACT_ADMIN_SECRET`; threshold-1 auto-approve; wallet-scoped reads; unit-tested. Requires funding the multisig wallet + configuring provider `payoutWalletAddress` before use. |
+| Email notifications (SMTP)                                                                     | ✅ Removed — the handler was never registered, its SMTP config was inert, and no recipient model existed. `EmailNotificationHandler`, the `EMAIL_*`/`SMTP_*` config, and the nodemailer dependency were deleted. Re-add with a proper per-recipient model if email is ever wanted.                                                                                                                                                 |
+| Rate limiting                                                                                  | IP-only today (self-audit M7). The README/SECURITY claim of "by IP or wallet" overstates it. Acceptable for v1 with documented limits, or add wallet-based limiting.                                                                                                                                                                                                                                                               |
+| External audit                                                                                 | ❌ Not done (see §1).                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Payment verification window (historical-hash reuse)                                            | ✅ **Fixed 2026-09-08** — quotes now carry `issuedAt`; payments dated before issuance are rejected (lower-bound window), closing the "old payment + fresh quote = one free access" gap. Tested.                                                                                                                                                                                                                                    |
+| Timeouts on Horizon/Soroban fetches                                                            | ✅ **Fixed 2026-09-08** — `HORIZON_TIMEOUT_MS` / `SOROBAN_RPC_TIMEOUT_MS` (default 10 s) via `AbortSignal.timeout`; server `requestTimeout`/`headersTimeout` caps. Tested.                                                                                                                                                                                                                                                         |
+| Request-size / memory bounds                                                                   | ✅ **Fixed 2026-09-08** — ≤128 messages, ≤64 KiB content, `max_tokens` ≤ 1M (zod) on top of the 1 MB body cap; streaming honors backpressure. Tested.                                                                                                                                                                                                                                                                              |
+| Dependency posture (supply chain)                                                              | ✅ **Improved 2026-09-08** — **0 critical** advisories; reachable runtime advisories in the gateway tree fixed via overrides (express, ws, body-parser, qs, uuid, lodash, js-yaml, toml, postcss, file-type). Remaining highs = major-version tracks (§7). CI: gitleaks + trivy + osv-scanner + SBOM per release; install-script allowlist.                                                                                        |
 
 ---
 
@@ -189,8 +194,10 @@ gate, distinct from the README's generic production checklist.
 
 ### C. Gateway & data
 
-- [ ] `pnpm db:push` applied so the `UnderpaymentDebt` table exists; schema
-      diff reviewed.
+- [x] `UnderpaymentDebt` covered by the migration history
+      (`20260909000000_add_underpayment_debt_drop_legacy`) — `prisma
+migrate deploy` on a fresh database produces the full schema, verified
+      by the backup/restore drill in CI.
 - [ ] `AUTH_DEV_MODE` unset/false in the mainnet environment (boot guard
       enforced).
 - [ ] Email-notification decision made (wired, or SMTP config removed).
@@ -208,7 +215,48 @@ gate, distinct from the README's generic production checklist.
 
 ---
 
-## 7. References
+## 7. Dependency upgrade tracks (remaining advisories)
+
+**Completed 2026-09-08** — the three previously tracked runtime residuals are
+resolved by major-version upgrades (verified: gateway unit + e2e suites and
+dashboard build all green on the new stacks):
+
+| Package                           | Before                    | After                                  | Notes                                                                                                                                        |
+| --------------------------------- | ------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `next` (dashboard)                | 14.2 (high, <15.5.21)     | **15.5.25** + React 19 / recharts 2.15 | dashboard has no auth middleware, so the middleware-bypass class never applied                                                               |
+| `@nestjs/core` / platform-express | 10.3 (moderate, <11.1.18) | **11.2.3** on Express 5.2.1            | Express 5: no wildcard routes or `req.query` mutation in gateway → clean migration                                                           |
+| `multer` (via platform-express)   | 1.4.x (high, <2.2.0)      | **2.3.0** (override; 2026-09-09)       | 2026 DoS CVEs (CVE-2026-77037/77078/82333) affect <2.3.0, so the 2.2.0 pin was overridden to 2.3.0; gateway exposes no file-upload endpoints |
+
+**Updated 2026-09-08 (after the nx 22 migration)** — the `nx` 19.5.7 and
+`webpack-dev-server` tracks above are **resolved** by the nx 22.7.9 migration
+(which also cleared `brace-expansion` via a scoped override to 5.0.9, and
+`minimatch`/`test-exclude` via overrides). `pnpm audit` now reports **2 high
+advisories, both `image-size`** — dev/build-tooling only, never shipped to
+runtime, no runtime-reachable path.
+
+**Updated 2026-09-09** — osv-scanner surfaced new advisories that landed
+after the audit above: `multer <2.3.0` (3 DoS CVEs, runtime via
+platform-express) and `svgo 3.3.4` (2 ReDoS advisories, build-tooling via
+`@svgr/plugin-svgo`). Both resolved with installable patched releases via
+`pnpm-workspace.yaml` overrides (`multer >=2.3.0`, `@svgr/plugin-svgo>svgo
+
+> =3.3.5`), verified by the local matrix. `pnpm audit` remains **0 critical**;
+
+| Package           | Severity | Why not fixed                                                                                                                                                                                         | Track                                                                         |
+| ----------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `image-size` (×2) | high     | **no patched version exists** (patched: null; vulnerable ≤2.0.2, latest 2.0.2); dev-only transitive of `less@4.1.3` via the unused `@nx/vite`→vite→less chain (this project uses no vite/vitest/less) | drop the `@nx/vite`/`@nx/module-federation` chain or wait for an upstream fix |
+
+**Rust (contracts) — report-only, via osv-scanner on the committed Cargo.lock
+files** (tracked 2026-09-09): `soroban-env-host`/`stellar-xdr`
+(GHSA-pm4j-7r4q-ccg8, GHSA-vwc7-r8mq-g2x9, GHSA-x57h-xx53-v53w) and
+`paste` (RUSTSEC-2024-0388) / `derivative` (RUSTSEC-2024-0436, derive-macro
+hygiene). All are pinned by the soroban-sdk version the contracts build
+against; bumping them means a Soroban SDK upgrade, which is deliberately
+held until the third-party contract audit (MAINNET_READINESS §1) — the
+advisories are low-risk for these contracts and do not affect the gateway
+runtime.
+
+## 8. References
 
 - `README.md` — Production Checklist (generic infra) and Trust Model
 - `AUDIT.md` — automated self-audit findings (2026-08-11)
@@ -216,4 +264,6 @@ gate, distinct from the README's generic production checklist.
 - `.env.mainnet.example` — mainnet environment template (Circle USDC issuer
   already set)
 - `scripts/deploy-contracts.sh` — network-aware deploy + address persistence
-- `DEPLOYMENT.md` — full deployment walkthrough
+- `DEPLOYMENT.md` — full deployment walkthrough (+ testnet verification journey)
+- `GAS-OPTIMIZATION.md` — storage/gas design + benchmarking methodology
+- `THREAT-MODEL.md` / `OPERATIONS.md` / `OBSERVABILITY.md` — threats, DR/RTO-RPO, dashboards

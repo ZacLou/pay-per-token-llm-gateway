@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Pay-per-request LLM gateway with stablecoin micropayments on Stellar.</strong>
   <br />
-  No API keys. No subscriptions. No rate limits.
+  No API keys. No subscriptions. Minimal rate limits.
   <br />
   Just pay USDC on-chain and access any LLM endpoint.
 </p>
@@ -23,8 +23,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Stellar-Testnet-green" alt="Stellar Testnet" />
-  <img src="https://img.shields.io/badge/NestJS-10.x-red" alt="NestJS" />
-  <img src="https://img.shields.io/badge/Next.js-14.x-black" alt="Next.js" />
+  <img src="https://img.shields.io/badge/NestJS-11.x-red" alt="NestJS" />
+  <img src="https://img.shields.io/badge/Next.js-15.x-black" alt="Next.js" />
   <img src="https://img.shields.io/badge/Soroban-Rust-orange" alt="Soroban Rust" />
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="License MIT" />
 </p>
@@ -286,7 +286,9 @@ pnpm nx run database:push
 pnpm dev:gateway
 # → http://localhost:3000
 # → Swagger docs: http://localhost:3000/api/docs
-# → Health check: http://localhost:3000/health
+# → Liveness:  http://localhost:3000/health · /health/live
+# → Readiness: http://localhost:3000/health/ready   (Postgres + Redis)
+# → Metrics:   http://localhost:3000/metrics         (Prometheus)
 ```
 
 ### 5. Run the Dashboard
@@ -484,15 +486,11 @@ Requires M-of-N signer approval for provider payouts:
 ### Deploying Contracts
 
 ```bash
-cargo install --locked stellar-cli --features opt
-
-cd contracts/payment-verifier
-stellar contract build
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/payment_verifier.wasm \
-  --source S... \
-  --network testnet
+bash scripts/build-contracts.sh
+STELLAR_NETWORK=testnet STELLAR_SECRET_KEY=S... bash scripts/deploy-contracts.sh
 ```
+
+`deploy-contracts.sh` builds all three contracts, deploys them to the target network, and records the contract IDs in `contracts/deployed-addresses.json` (gitignored — it is a per-environment deploy artifact). The gateway reads this file at startup via `@x402/config` and falls back to hardcoded testnet IDs when it is missing.
 
 The contracts store unbounded state (payment audit trail, escrow
 balances/usage, multisig proposals) as individual **persistent ledger
@@ -549,6 +547,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete step-by-step guide.
 | `STELLAR_NETWORK`                      | `testnet`                             | Stellar network (`testnet`, `mainnet`, `futurenet`) — on `mainnet` the gateway refuses to boot if Horizon/RPC point at a test/future network, the passphrase is foreign, or `USDC_ISSUER` is not Circle's |
 | `HORIZON_URL`                          | `https://horizon-testnet.stellar.org` | Horizon API endpoint                                                                                                                                                                                      |
 | `SOROBAN_RPC_URL`                      | `https://soroban-testnet.stellar.org` | Soroban RPC endpoint                                                                                                                                                                                      |
+| `HORIZON_TIMEOUT_MS`                   | `10000`                               | Per-request Horizon timeout — a hung endpoint can never hold a request open                                                                                                                               |
+| `SOROBAN_RPC_TIMEOUT_MS`               | `10000`                               | Per-request Soroban RPC timeout                                                                                                                                                                           |
 | `NETWORK_PASSPHRASE`                   | `Test SDF Network ; September 2015`   | Stellar network passphrase                                                                                                                                                                                |
 | `USDC_ISSUER`                          | `GBBD47...`                           | USDC token issuer on Stellar — mainnet requires Circle's issuer                                                                                                                                           |
 | `PUBLIC_GATEWAY_URL`                   | —                                     | Public base URL used in payment quotes/instructions                                                                                                                                                       |
@@ -563,6 +563,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete step-by-step guide.
 | `TRUST_PROXY`                          | `1`                                   | Express `trust proxy` hops so IP-based rate limiting sees real client IPs behind Cloudflare/NGINX/Railway                                                                                                 |
 | `QUOTE_EXPIRY_SECONDS`                 | `300`                                 | Time before quotes expire (5 min)                                                                                                                                                                         |
 | `LLM_REQUEST_TIMEOUT`                  | `120000`                              | Upstream LLM timeout in ms                                                                                                                                                                                |
+| `LLM_STREAM_TIMEOUT`                   | `600000`                              | Upstream streaming timeout in ms                                                                                                                                                                          |
+| `LLM_MAX_RETRIES`                      | `2`                                   | Max upstream retries (4xx never retried)                                                                                                                                                                  |
 | `CORS_ORIGINS`                         | `http://localhost:3001`               | Allowed CORS origins (comma-separated)                                                                                                                                                                    |
 | `UPSTREAM_API_KEY_<PROVIDER>`          | —                                     | Upstream LLM API key per provider                                                                                                                                                                         |
 
@@ -592,7 +594,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete step-by-step guide.
 - [ ] Multi-provider routing with load balancing
 - [ ] Python SDK with LangChain integration
 - [ ] Kubernetes deployment manifests
-- [ ] Provider payout automation via multisig contracts
+- [x] Provider payout automation via multisig contracts
 - [ ] Prepaid credit escrow contract integration (opt-in experimental today — see [MAINNET_READINESS.md](./MAINNET_READINESS.md))
 
 ### 💡 v3 — Planned
@@ -611,9 +613,25 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete step-by-step guide.
 
 **Self-tested — external audit pending.** No third-party firm has audited the
 Soroban contracts or the gateway as of September 2026. The in-repo
-[`AUDIT.md`](./AUDIT.md) is an automated self-audit; its actionable findings
-have been fixed. See [`MAINNET_READINESS.md`](./MAINNET_READINESS.md) for the
-go/no-go gate and what a mainnet launch requires first.
+[`AUDIT.md`](./AUDIT.md) is the audit findings ledger; its actionable findings
+have been fixed (latest pass 2026-09-08: quote-window integrity, network
+fetch timeouts, request-size bounds, readiness + metrics endpoints,
+dependency overrides to 0 critical, CI secret/container/lockfile scans,
+non-root containers). See [`MAINNET_READINESS.md`](./MAINNET_READINESS.md)
+for the go/no-go gate and what a mainnet launch requires first.
+
+### Documentation
+
+| Doc                                            | Contents                                                |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md)         | Components, request flow, storage, contracts, topology  |
+| [`THREAT-MODEL.md`](./THREAT-MODEL.md)         | Assets, trust boundaries, per-threat mitigations        |
+| [`API.md`](./API.md)                           | Full HTTP API reference                                 |
+| [`GAS-OPTIMIZATION.md`](./GAS-OPTIMIZATION.md) | Soroban storage/gas design + benchmarking methodology   |
+| [`OPERATIONS.md`](./OPERATIONS.md)             | RTO/RPO, backup/restore, DR, runbooks                   |
+| [`OBSERVABILITY.md`](./OBSERVABILITY.md)       | Logs, metrics, alerts, Grafana dashboard                |
+| [`DEPLOYMENT.md`](./DEPLOYMENT.md)             | Railway/Vercel/Docker + testnet verification journey    |
+| [`SECURITY.md`](./SECURITY.md)                 | Disclosure policy, residual risks, production checklist |
 
 ### Trust Model
 
@@ -640,8 +658,10 @@ go/no-go gate and what a mainnet launch requires first.
 - [ ] Run behind Cloudflare/NGINX with TLS termination
 - [ ] Rotate JWT secrets regularly
 - [ ] Use separate Stellar accounts for receiving vs. payouts
-- [ ] Set up monitoring alerts for payment verification failures
-- [ ] Implement circuit breakers for upstream LLM failures
+- [x] Set up monitoring alerts for payment verification failures
+- [x] Implement circuit breakers for upstream LLM failures
+      (per-hostname, Redis-shared: 5 failures → open 30 s, half-open probe —
+      see THREAT-MODEL G7 and the `x402_circuit_breaker_opens_total` metric)
 
 See [SECURITY.md](./SECURITY.md) for full security policy.
 
