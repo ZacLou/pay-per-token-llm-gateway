@@ -1,10 +1,12 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useRoutes } from '@/lib/hooks';
 import Skeleton from '@/components/Skeleton';
 import { ApiError } from '@/lib/api';
 
 export default function RoutesContent() {
+  const router = useRouter();
   const { data, isLoading, isError, error, refetch } = useRoutes();
 
   if (isLoading) return <Skeleton />;
@@ -33,8 +35,11 @@ export default function RoutesContent() {
     }
 
     const handleAction = () => {
-      if (redirect) window.location.href = '/auth';
-      else refetch();
+      if (redirect) {
+        router.push('/auth');
+      } else {
+        refetch();
+      }
     };
 
     return (
