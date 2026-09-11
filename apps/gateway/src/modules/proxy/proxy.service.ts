@@ -142,23 +142,25 @@ class CircuitBreaker {
         return 'ok'
       `;
 
-      const result = (await redis.eval(
+      const result = await redis.eval(
         script,
         1,
         key,
         String(Date.now()),
         String(this.cooldownMs),
         String(Math.ceil(this.cooldownMs / 1000) + 10),
-      )) as string;
+      );
 
-      if (result === 'ok' || result === 'half-open') {
-        if (result === 'half-open') {
+      const resultStr = String(result);
+
+      if (resultStr === 'ok' || resultStr === 'half-open') {
+        if (resultStr === 'half-open') {
           logger.warn('Circuit half-open — allowing test call', { hostname });
         }
         return;
       }
 
-      const retryIn = result.replace('open:', '');
+      const retryIn = resultStr.replace('open:', '');
       throw new Error(`Circuit breaker open for ${hostname}. Retry in ${retryIn}s.`);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('Circuit breaker open')) {
@@ -202,7 +204,7 @@ class CircuitBreaker {
         return 'closed'
       `;
 
-      const result = (await redis.eval(
+      const result = await redis.eval(
         script,
         2,
         failuresKey,
@@ -212,9 +214,11 @@ class CircuitBreaker {
         String(this.cooldownMs / 1000 + 10),
         String(this.failureThreshold),
         String(Math.ceil(this.cooldownMs / 1000) + 10),
-      )) as string;
+      );
 
-      if (result === 'open') {
+      const resultStr = String(result);
+
+      if (resultStr === 'open') {
         this.recordOpened(hostname);
         logger.error('Circuit breaker opened (Redis)', {
           hostname,

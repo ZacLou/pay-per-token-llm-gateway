@@ -12,13 +12,13 @@
 | Metric                       | Value                                                       |
 | ---------------------------- | ----------------------------------------------------------- |
 | Curated issues               | **18** (10 original Wave-8 + 8 hardening/feature batch)     |
-| Open (up for grabs)          | **11**                                                      |
-| Implemented & closed         | **7** ✅                                                    |
+| Open (up for grabs)          | **0**                                                       |
+| Implemented & closed         | **21** ✅                                                   |
 | Areas covered                | contracts, gateway, SDK, dashboard, notifications, database |
 | `good first issue` count     | **6**                                                       |
 | `security`-labeled count     | **4**                                                       |
 | Total points (open + closed) | **2,700**                                                   |
-| Total points (open only)     | **1,550**                                                   |
+| Total points (open only)     | **0**                                                       |
 
 **Point model:** High = 200 · Medium = 150 · Trivial = 100
 
@@ -33,20 +33,20 @@
 | 1   | Wire credit-escrow settlement for metered pricing | [#25](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/25) | High       | ✅ closed | 200 |
 | 11  | Multisig payout automation                        | [#40](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/40) | High       | ✅ closed | 200 |
 | 3   | Clamp unbounded pagination limits (gas DoS)       | [#27](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/27) | Medium     | ✅ closed | 150 |
-| 4   | Remove `extend_ttl` from read-only functions      | [#28](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/28) | Medium     | open      | 150 |
+| 4   | Remove `extend_ttl` from read-only functions      | [#28](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/28) | Medium     | ✅ closed | 150 |
 | 10  | Escrow accounting invariant tests                 | [#34](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/34) | Medium     | ✅ closed | 150 |
 
 ### 🚪 Gateway (NestJS)
 
 | #   | Issue                                               | GitHub                                                                                  | Difficulty | Status    | Pts |
 | --- | --------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------- | --------- | --- |
-| 12  | Explicit `TRUST_PROXY` + wallet-based rate limiting | [#41](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/41) | Medium     | open      | 150 |
-| 13  | Validate payout wallets + provider approval flow    | [#42](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/42) | Medium     | open      | 150 |
-| 15  | SQL time-series bucketing                           | [#44](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/44) | Medium     | open      | 150 |
-| 5   | Streaming (SSE) payment-receipt headers             | [#29](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/29) | Medium     | open      | 150 |
-| 7   | Enforce `minPaymentAmount`                          | [#31](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/31) | Trivial    | open      | 100 |
-| 17  | Populate route in payment receipts                  | [#46](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/46) | Trivial    | open      | 100 |
-| 18  | Remove unused `Session`/`ApiKey` Prisma models      | [#47](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/47) | Trivial    | open      | 100 |
+| 12  | Explicit `TRUST_PROXY` + wallet-based rate limiting | [#41](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/41) | Medium     | ✅ closed | 150 |
+| 13  | Validate payout wallets + provider approval flow    | [#42](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/42) | Medium     | ✅ closed | 150 |
+| 15  | SQL time-series bucketing                           | [#44](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/44) | Medium     | ✅ closed | 150 |
+| 5   | Streaming (SSE) payment-receipt headers             | [#29](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/29) | Medium     | ✅ closed | 150 |
+| 7   | Enforce `minPaymentAmount`                          | [#31](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/31) | Trivial    | ✅ closed | 100 |
+| 17  | Populate route in payment receipts                  | [#46](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/46) | Trivial    | ✅ closed | 100 |
+| 18  | Remove unused `Session`/`ApiKey` Prisma models      | [#47](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/47) | Trivial    | ✅ closed | 100 |
 | 6   | DNS rebinding protection at proxy time              | [#30](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/30) | Medium     | ✅ closed | 150 |
 
 ### 🔌 Client SDK (TypeScript)
@@ -66,30 +66,30 @@
 
 | #   | Issue                                    | GitHub                                                                                  | Difficulty | Status    | Pts |
 | --- | ---------------------------------------- | --------------------------------------------------------------------------------------- | ---------- | --------- | --- |
-| 14  | Persist in-app notifications in Postgres | [#43](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/43) | Medium     | open      | 150 |
+| 14  | Persist in-app notifications in Postgres | [#43](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/43) | Medium     | ✅ closed | 150 |
 | 9   | Email notification channel (nodemailer)  | [#33](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/33) | Medium     | ✅ closed | 150 |
 
 ---
 
 ## 🎯 Grouped by Difficulty
 
-| Difficulty        | Open   | Closed | Issue numbers                                              | Points    |
-| ----------------- | ------ | ------ | ---------------------------------------------------------- | --------- |
-| **High** (200)    | 0      | 3      | #25, #26, #40                                              | 600       |
-| **Medium** (150)  | 8      | 7      | #27, #28, #29, #30, #32, #33, #34, #41, #42, #43, #44, #45 | 2,250     |
-| **Trivial** (100) | 3      | 0      | #31, #46, #47                                              | 300       |
-| **Total**         | **11** | **10** | —                                                          | **2,700** |
+| Difficulty        | Open  | Closed | Issue numbers                                              | Points    |
+| ----------------- | ----- | ------ | ---------------------------------------------------------- | --------- |
+| **High** (200)    | 0     | 3      | #25, #26, #40                                              | 600       |
+| **Medium** (150)  | 0     | 15     | #27, #28, #29, #30, #32, #33, #34, #41, #42, #43, #44, #45 | 2,250     |
+| **Trivial** (100) | 0     | 3      | #31, #46, #47                                              | 300       |
+| **Total**         | **0** | **21** | —                                                          | **2,700** |
 
 ### 🌱 Quick wins (`good first issue`) — great onboarding entry points
 
-| Issue                                          | GitHub                                                                                  | Pts |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------- | --- |
-| Enforce `minPaymentAmount`                     | [#31](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/31) | 100 |
-| Populate route in payment receipts             | [#46](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/46) | 100 |
-| Remove unused `Session`/`ApiKey` Prisma models | [#47](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/47) | 100 |
-| SQL time-series bucketing (Medium)             | [#44](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/44) | 150 |
-| SDK unit tests (Medium, closed)                | [#45](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/45) | 150 |
-| Dashboard unit tests (Medium, closed)          | [#32](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/32) | 150 |
+| Issue                                              | GitHub                                                                                  | Pts |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------- | --- |
+| ~~Enforce `minPaymentAmount`~~                     | [#31](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/31) | 100 |
+| ~~Populate route in payment receipts~~             | [#46](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/46) | 100 |
+| ~~Remove unused `Session`/`ApiKey` Prisma models~~ | [#47](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/47) | 100 |
+| SQL time-series bucketing (Medium)                 | [#44](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/44) | 150 |
+| SDK unit tests (Medium, closed)                    | [#45](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/45) | 150 |
+| Dashboard unit tests (Medium, closed)              | [#32](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/32) | 150 |
 
 ### 🔒 Security-hardening cluster (attracts senior reviewers)
 
