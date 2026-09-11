@@ -41,6 +41,9 @@ LABEL org.opencontainers.image.title="x402 Provider Dashboard" \
 
 WORKDIR /app
 
+# Install curl for Docker HEALTHCHECK
+RUN apk add --no-cache curl
+
 ENV NODE_ENV=production
 
 # Copy standalone server with bundled dependencies
