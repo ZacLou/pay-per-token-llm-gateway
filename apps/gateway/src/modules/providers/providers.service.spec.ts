@@ -40,10 +40,10 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockValidateWebhookUrl = validateWebhookUrl as jest.MockedFunction<typeof validateWebhookUrl>;
 const mockGetConfig = getConfig as jest.MockedFunction<typeof getConfig>;
 
-const WALLET = 'GA5ZSE6VKPVFLEXMWJQBGHE4FJHKQIFSJMLQ7H4VFQB4UHLEH5IOVK3F';
-const OTHER_WALLET = 'GA5ZSE6VKPVFLEXMWJQBGHE4FJHKQIFSJMLQ7H4VFQB4UHLEH5IOVK4G';
+const WALLET = 'GCKVZERLXRNTD3TVAZQYKUGPH3FYPBRKLQ2IG7OBNEP5WPZTQQMAZTQX';
+const OTHER_WALLET = 'GBPYRN5EUXSUNA3XA5NURIKOFXRU37MHI777N5FZC7RWYOZAPCVBUUTF';
 // A valid but different Stellar public key for payout-twice tests.
-const PAYOUT_WALLET = 'GABMBNNZQQPY7ZBBFBNPPQH2BRAYQ7LRTLPAWGZ7XTUFUEEX2VOILYHK';
+const PAYOUT_WALLET = 'GBA4T5WVWQZUOC4VOUXXTGHRVAIXF7KSVD3QJHLTQI42FLNWVAOWFN2Q';
 
 function makeProvider(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -171,7 +171,10 @@ describe('ProvidersService', () => {
       const mockCreated = makeProvider({ id: 'new-id', name: 'Same Wallet' });
       (mockPrisma.provider.create as jest.Mock).mockResolvedValue(mockCreated);
 
-      const result = await service.create({ name: 'Same Wallet', payoutWalletAddress: WALLET }, WALLET);
+      const result = await service.create(
+        { name: 'Same Wallet', payoutWalletAddress: WALLET },
+        WALLET,
+      );
 
       expect(result.name).toBe('Same Wallet');
       expect(mockPrisma.provider.create).toHaveBeenCalled();
@@ -285,9 +288,9 @@ describe('ProvidersService', () => {
     it('rejects a payout wallet equal to the auth wallet on update by default', async () => {
       (mockPrisma.provider.findFirst as jest.Mock).mockResolvedValue(makeProvider());
 
-      await expect(
-        service.update('p-1', { payoutWalletAddress: WALLET }, WALLET),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.update('p-1', { payoutWalletAddress: WALLET }, WALLET)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockPrisma.provider.update).not.toHaveBeenCalled();
     });
 

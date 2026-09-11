@@ -10,6 +10,7 @@ import {
 import { getConfig } from '@x402/config';
 import { logger } from '@x402/logger';
 import { isPaymentUsedOnChain, recordPaymentOnChain } from './contract-client';
+import { getEscrowBalance } from './escrow-client';
 import { MetricsService } from '../../common/metrics.service';
 import type { Quote, PaymentVerification, PaymentReceipt, RouteConfig } from '@x402/types';
 import type { PrismaClient } from '@x402/database';
@@ -49,7 +50,6 @@ export class X402Service {
       usdcIssuer: config.payment.usdcIssuer,
       minPaymentAmount: config.payment.minPaymentAmount,
       estimatedTokens,
-      minPaymentAmount: config.payment.minPaymentAmount,
     });
 
     this.metrics.safe(() =>

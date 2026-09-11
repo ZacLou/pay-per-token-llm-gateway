@@ -27,6 +27,7 @@ import { getConfig } from '@x402/config';
 import { logger } from '@x402/logger';
 import { generateId } from '@x402/shared';
 import { settleEscrow } from '../x402/escrow-client';
+import { chargeEscrowOnChain } from '../x402/contract-client';
 import type { ChatCompletionRequest, PaymentRecord, Quote, RouteConfig } from '@x402/types';
 
 @ApiTags('proxy')
@@ -108,7 +109,7 @@ export class ProxyController {
           });
         }
       }
-      if (!txHash) {
+      if (!txHash && !escrowUser) {
         const quoteSpan = childSpan('quote.generate', req as TraceRequest, {
           model,
           pricingModel: route.pricingModel,
@@ -118,13 +119,22 @@ export class ProxyController {
         return;
       }
 
+      let payment: PaymentRecord | null = null;
+
       // 4. Verify payment (includes cross-route replay protection). The
       //    span wraps the whole verify → claim → debt-gate path so its
       //    duration reflects the full on-chain verification.
       const verifySpan = childSpan('payment.verify', req as TraceRequest, { txHash });
-      const verified = await this.verifyAndConfirmPayment(txHash, route, res, traceId);
-      verifySpan.end({ txHash, verified });
-      if (!verified) {
+      if (escrowUser) {
+        payment = await this.verifyAndConfirmEscrowPayment(escrowUser, route, res, traceId, body);
+      } else if (txHash) {
+        const verified = await this.verifyAndConfirmPayment(txHash, route, res, traceId);
+        if (verified) {
+          payment = await this.paymentsService.findByTxHash(txHash);
+        }
+      }
+      verifySpan.end({ txHash, verified: !!payment });
+      if (!payment) {
         return; // 402 error response already sent
       }
 
@@ -163,7 +173,7 @@ export class ProxyController {
           res,
           forwardBody,
           route,
-          txHash,
+          payment?.txHash || txHash || '',
           upstreamApiKey,
           payment,
           traceId,
@@ -835,9 +845,10 @@ export class ProxyController {
     // Record actual cost on the payment
     if (payment) {
       await this.paymentsService.recordActualCost(payment.quoteId, actualCost, tokensUsed);
-      
+
       // If this was a streaming request using escrow, we charge the exact amount now
-      if (payment.txHash && payment.txHash.startsWith('escrow:')) {
+      const escrowPayer = payment.payerAddress;
+      if (payment.txHash && payment.txHash.startsWith('escrow:') && escrowPayer) {
         const config = getConfig();
         if (config.payment.contractAdminSecret) {
           logger.info(`Charging exact streaming amount from escrow: ${actualCost}`);
@@ -846,7 +857,7 @@ export class ProxyController {
             rpcUrl: config.stellar.sorobanRpcUrl,
             networkPassphrase: config.stellar.networkPassphrase,
             adminSecret: config.payment.contractAdminSecret,
-            payer: payment.payerAddress,
+            payer: escrowPayer,
             amount: actualCost,
             quoteId: payment.quoteId,
           });

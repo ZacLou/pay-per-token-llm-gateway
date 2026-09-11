@@ -14,3 +14,6 @@
 6ad15f4db3cd66094ff4dc0eb6f7d98392a5e54a:apps/gateway/src/modules/webhooks/webhooks.service.spec.ts:generic-api-key:208
 9c5509ed388fae339b5c0ce642bf56b09ec314c8:DEPLOYMENT.md:curl-auth-header:106
 9c5509ed388fae339b5c0ce642bf56b09ec314c8:DEPLOYMENT.md:curl-auth-header:119
+# Soroban contract-ID (public identifier, not a secret) used as a multisig
+# test fixture — flagged by generic-api-key due to high-entropy base32.
+6961933d942eb52076a5a3b70161457b7eb74514:apps/gateway/src/modules/x402/multisig-client.spec.ts:generic-api-key:51
