@@ -30,18 +30,50 @@ jobs:
   deploy:
     name: Deploy dashboard to Vercel (production)
     runs-on: ubuntu-latest
+    # `secrets` is not available in step-level `if:` expressions, so bridge the
+    # presence check through job env — the same pattern deploy.yml uses for
+    # HAS_STELLAR_SECRET. Without it, a repo that has not been wired up to
+    # Vercel yet fails every push to main with the opaque action error
+    # "Input required and not supplied: vercel-token". A missing credential is
+    # a configuration gap, so it skips (with instructions) rather than fails.
+    env:
+      HAS_VERCEL_SECRET: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
+      - name: Vercel credentials not configured — skipping deploy
+        if: env.HAS_VERCEL_SECRET != 'true'
+        run: |
+          {
+            echo "### Dashboard deploy skipped"
+            echo ""
+            echo "\`VERCEL_TOKEN\` is not set, so the Vercel deploy step was skipped."
+            echo "This is a configuration gap, not a build failure."
+            echo ""
+            echo "To enable production dashboard deploys, add these repository secrets"
+            echo "under *Settings → Secrets and variables → Actions*:"
+            echo ""
+            echo "| Secret | Where to find it |"
+            echo "| --- | --- |"
+            echo "| \`VERCEL_TOKEN\` | vercel.com/account/tokens |"
+            echo "| \`VERCEL_ORG_ID\` | Vercel project → Settings → General → Team ID |"
+            echo "| \`VERCEL_PROJECT_ID\` | Vercel project → Settings → General → Project ID |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=Dashboard deploy skipped::VERCEL_TOKEN is not set — see the job summary for setup instructions."
+
       - uses: actions/checkout@v4
+        if: env.HAS_VERCEL_SECRET == 'true'
 
       - name: Read Node version from .nvmrc
+        if: env.HAS_VERCEL_SECRET == 'true'
         id: nvm
         run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
 
       - uses: pnpm/action-setup@v4
+        if: env.HAS_VERCEL_SECRET == 'true'
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
+        if: env.HAS_VERCEL_SECRET == 'true'
         with:
           node-version: ${{ steps.nvm.outputs.NODE_VERSION }}
 
@@ -63,6 +95,7 @@ jobs:
       #      placeholder in apps/dashboard/vercel.json) so the /api/gateway/*
       #      rewrites point at the real Railway gateway URL.
       - name: Deploy to Vercel
+        if: env.HAS_VERCEL_SECRET == 'true'
         uses: amondnet/vercel-action@v42
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}

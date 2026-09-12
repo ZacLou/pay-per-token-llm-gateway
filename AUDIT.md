@@ -473,3 +473,41 @@ the package-relative schema. Verified on a fresh database: **0 → 11 tables**.
 The `gateway-image` CI job now applies migrations with this exact command before
 booting the gateway, so the deploy path is exercised on every PR — previously it
 was never executed anywhere.
+
+### 9.10 CI triage: the Vercel deploy failure on `main`
+
+While the commit was waiting to be pushed, the one pre-existing red workflow was
+triaged. `Deploy Dashboard to Vercel` fails on every push to `main` (including
+the baseline `2d852ba`, so it predates this pass) after 13 s:
+
+> `##[error]Input required and not supplied: vercel-token`
+
+**F10 — cause:** `amondnet/vercel-action` requires a non-empty `vercel-token`,
+and `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` were never configured
+on the repository. That is a configuration gap rather than a build defect, but it
+left every push to `main` permanently red — and this pass's commit, which deletes
+files under `packages/**` (a path in that workflow's `paths` filter), would have
+added one more.
+
+**Fix:** the job now bridges the credential check through job env
+(`HAS_VERCEL_SECRET: ${{ secrets.VERCEL_TOKEN != '' }}`) and skips the deploy with
+a warning annotation plus a setup table in the job summary — the same pattern
+`deploy.yml`'s `deploy_contracts` job already uses for `HAS_STELLAR_SECRET`.
+
+That bridge is required, not stylistic: `secrets` is not an allowed context in a
+step-level `if:`. actionlint confirms this directly — available contexts there
+are `env`, `github`, `inputs`, `job`, `matrix`, `needs`, `runner`, `steps`,
+`strategy`, `vars`.
+
+The `paths` filter was deliberately left unchanged: the dashboard does import
+workspace packages, so `packages/**` belongs there.
+
+**Evidence:** actionlint v1.7.12 reports clean across all three workflows, and was
+proven non-vacuous by feeding it a control file containing the
+`secrets`-in-a-step-`if` anti-pattern, which it flagged. The new step's shell was
+extracted and executed standalone: it emits the warning annotation and renders the
+setup table into `$GITHUB_STEP_SUMMARY`.
+
+**Not changed (flagged only):** `deploy.yml`'s `docker` job has the same latent
+trap with `DOCKER_USERNAME` / `DOCKER_PASSWORD`, but it is tag-gated rather than
+push-triggered, so it is not producing noise today.
