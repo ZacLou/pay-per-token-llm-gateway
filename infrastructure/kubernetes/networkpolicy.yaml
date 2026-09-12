@@ -1,0 +1,177 @@
+# Network segmentation for the x402 stack.
+#
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, Antrea, …). On a
+# cluster whose CNI ignores NetworkPolicy these objects are inert rather than
+# harmful.
+#
+# Model: deny all ingress + egress in the namespace, then allow only the flows
+# each component needs. The datastores are the sensitive target and are
+# reachable only from the gateway (plus the migration Job, for Postgres).
+#
+# Ingress to the two HTTP services is intentionally left open (any source) on
+# their service port: kubelet health probes and the ingress controller both
+# connect from outside the namespace with cluster-specific source addresses.
+# If your CNI handles kubelet probes correctly you can tighten the two HTTP
+# rules to your ingress-controller namespace, e.g.
+#   from:
+#     - namespaceSelector:
+#         matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+#
+# Egress on 443 is allowed for the gateway (Horizon, Soroban RPC, upstream LLM
+# APIs) and the dashboard (Next.js). Change to 80/443 if you point at plain-HTTP
+# chain endpoints.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: x402
+spec:
+  podSelector: {}
+  policyTypes: ['Ingress', 'Egress']
+---
+# DNS must stay reachable or every pod in the namespace loses name resolution.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: x402
+spec:
+  podSelector: {}
+  policyTypes: ['Egress']
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Gateway: serve HTTP, reach Postgres + Redis, and call the public internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway
+  namespace: x402
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  policyTypes: ['Ingress', 'Egress']
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Public chain + upstream LLM endpoints.
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+# Dashboard: serve HTTP and reach the gateway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard
+  namespace: x402
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard
+  policyTypes: ['Ingress', 'Egress']
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 3001
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 3000
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+# Postgres: only the gateway (runtime) and the migration Job (schema) connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+  namespace: x402
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes: ['Ingress']
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prisma-migrate
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Redis: only the gateway connects.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis
+  namespace: x402
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes: ['Ingress']
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# Migration Job: default-deny blocks egress too, so the Job needs an explicit
+# rule to reach Postgres (its ingress into Postgres is allowed by the
+# `postgres` policy above). DNS is already covered by `allow-dns-egress`.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prisma-migrate
+  namespace: x402
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prisma-migrate
+  policyTypes: ['Egress']
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432

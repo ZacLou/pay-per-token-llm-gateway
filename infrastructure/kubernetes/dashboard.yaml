@@ -34,6 +34,11 @@ spec:
     rollingUpdate:
       maxUnavailable: 0
       maxSurge: 1
+  # Readiness-gated rollout (see gateway.yaml): the new pod must report Ready
+  # and stay Ready for minReadySeconds before the old replica is removed.
+  minReadySeconds: 10
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: dashboard
@@ -43,10 +48,21 @@ spec:
         app.kubernetes.io/name: dashboard
         app.kubernetes.io/part-of: x402
     spec:
+      # Dedicated ServiceAccount; no Kubernetes API access is needed.
+      serviceAccountName: x402-dashboard
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: dashboard
           image: x402/dashboard:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ['ALL']
           ports:
             - name: http
               containerPort: 3001

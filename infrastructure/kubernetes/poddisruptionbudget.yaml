@@ -1,0 +1,37 @@
+# PodDisruptionBudgets protect the HTTP tier during VOLUNTARY disruptions —
+# node drains, cluster upgrades, `kubectl drain` — so a maintenance window can
+# never evict both replicas at once. (They do nothing for unplanned node
+# failure; the Deployments' maxUnavailable: 0 rolling update plus the
+# dependency-aware /health/ready readiness probe already gate rollouts.)
+#
+# Deliberately NOT set for the Postgres and Redis StatefulSets: each runs a
+# single replica backed by a PVC and cannot fail over, so a PDB there would
+# only block node drains indefinitely instead of protecting anything. Drain
+# those nodes deliberately, with the datastore backed up first (OPERATIONS.md).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  namespace: x402
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/part-of: x402
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dashboard
+  namespace: x402
+  labels:
+    app.kubernetes.io/name: dashboard
+    app.kubernetes.io/part-of: x402
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard

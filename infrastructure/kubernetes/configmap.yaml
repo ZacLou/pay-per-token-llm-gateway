@@ -23,6 +23,14 @@ data:
   USDC_ISSUER: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
   CORS_ORIGINS: https://x402-dashboard.vercel.app
   TRUST_PROXY: '1'
+  # Public base URL for the gateway (ingress host, not the in-cluster Service).
+  # Without it, 402 quotes/instructions fall back to `http://0.0.0.0:3000`,
+  # which clients cannot reach. Keep in sync with ingress.yaml.
+  PUBLIC_GATEWAY_URL: https://gateway.example.com
 
   # ── Dashboard ───────────────────────────────────────────
-  NEXT_PUBLIC_GATEWAY_URL: http://gateway:3000
+  # NOTE: NEXT_PUBLIC_* variables are inlined by Next.js at BUILD time, so
+  # setting one here has no runtime effect. The dashboard's gateway URL is
+  # baked in via the NEXT_PUBLIC_GATEWAY_URL Docker build arg (see
+  # Dockerfile.dashboard) and MUST be this same public ingress URL — not the
+  # in-cluster `gateway` Service, which browsers cannot resolve.

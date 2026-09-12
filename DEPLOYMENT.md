@@ -282,6 +282,24 @@ Unlike the dev file, it **fails fast when secrets are missing**:
 It pins `STELLAR_NETWORK=mainnet`, adds `restart: unless-stopped`, and
 healthchecks every service. A full reference lives in `.env.mainnet.example`.
 
+#### Dashboard URL in Docker builds
+
+The dashboard reads `NEXT_PUBLIC_GATEWAY_URL` at **build** time — Next.js
+inlines `NEXT_PUBLIC_*` into the client bundle, so setting it at container
+start has no effect. Supply it when building the image instead:
+
+```bash
+NEXT_PUBLIC_GATEWAY_URL=https://gateway.example.com \
+  docker compose -f infrastructure/docker/docker-compose.yml build dashboard
+```
+
+`docker compose` forwards it as the `Dockerfile.dashboard` build arg, and the
+`deploy.yml` workflow passes the GitHub repository variable of the same name on
+`v*` tags. The value must be the **public** gateway URL a browser can reach —
+never an in-cluster Service DNS name such as `http://gateway:3000`. The mainnet
+compose file (`docker-compose.mainnet.yml`) requires it and fails fast when it
+is unset, so a mainnet dashboard can never ship with a localhost URL baked in.
+
 ### 5.4 Railway deployment
 
 Create a Railway project with PostgreSQL and Redis (same layout as Part 1),

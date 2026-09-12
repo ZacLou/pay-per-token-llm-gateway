@@ -274,7 +274,8 @@ but had the following **genuine** defects, all now fixed and regression-tested.
 | H5  | Every escrow draw reused a synthetic `txHash` of `''`, colliding with the unique `Payment.txHash` index → escrow settlement only worked once, and the `escrow:` charge branch never ran           | Unique `escrow:<quoteId>` synthetic hash per draw                                                                                   | new `x402.service` suite (4 cases)                         |
 | H6  | Payout automation paid providers without validating the destination or re-checking approval, and recorded the destination as an approver; threshold-1 auto-approve passed an empty signer address | `StrKey` validation, active/approval re-check at proposal time, real signer address recorded, signer derived from the signing key   | new `payouts.service` suite (11 cases)                     |
 | H7  | An unexpected numeric Redis reply was misread as `open:1`, fast-failing every request (this was failing the e2e suite)                                                                            | Only a well-formed `open:<n>` reply may reject; anything else fails open like the Redis-error path                                  | circuit-breaker Redis test                                 |
-| H8  | In-app notifications lived only in an in-memory queue (the `Notification` table was unused)                                                                                                       | Persisted in Postgres with `read`/`readAt`, exposed via `/api/v1/notifications` + dashboard feed                                    | notifications service suite (11 cases) + dashboard api lib |     | H9  | Gateway e2e suite was **red** (payment forwarding returned 502) | Root-caused to H7; suite is green | 39/39 e2e |
+| H8  | In-app notifications lived only in an in-memory queue (the `Notification` table was unused)                                                                                                       | Persisted in Postgres with `read`/`readAt`, exposed via `/api/v1/notifications` + dashboard feed                                    | notifications service suite (11 cases) + dashboard api lib |
+| H9  | Gateway e2e suite was **red** (payment forwarding returned 502)                                                                                                                                   | Root-caused to H7; suite is green                                                                                                   | 39/39 e2e                                                  |
 | H10 | Dashboard had `jest.config.ts` + 3 spec files but **no `test` target**, so 23 tests never ran in CI (the closed #32 issue was unverifiable)                                                       | Added the `test` target (and the missing `jest-environment-jsdom` dev dependency the config already required)                       | 23 dashboard tests now run in `nx test --all`              |
 | H11 | Once the dashboard suite actually ran, `cn()` was a naive `join(' ')` that never performed the Tailwind conflict resolution its test (and its `clsx`/`tailwind-merge` deps) expected              | Implemented `cn` as `twMerge(clsx(inputs))`                                                                                         | `utils.spec` conflict-resolution case now passes           |
 
@@ -289,3 +290,186 @@ dev-tooling advisories remain open tracked residuals.
 _Addendum generated 2026-09-12._
 
 _Original report generated 2026-09-08 by automated audit + hardening pass._
+
+---
+
+## 9. Addendum — 2026-09-12 repository-structure & deployment-manifest pass
+
+Third review. The codebase was already green (lint, typecheck, 423 unit tests,
+49 e2e tests, gateway bundle), so this pass focused on **repository structure**
+and the **Kubernetes deployment manifests**, where genuine defects remained.
+
+### 9.1 Dead / duplicated trees removed (32 files)
+
+Three Python SDK implementations and three Kubernetes manifest sets had
+accumulated. Only one of each was referenced by any doc, CI job, or script —
+the rest were unmaintained duplicates that would confuse contributors and
+drift out of sync. Verified with a whole-repo reference scan before removal.
+
+| #   | Removed                                                                       | Why                                                                                                                                                                                                                                             |
+| --- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | `github-4-Pay-Per-Token-LLM-Gateway-pay-per-token-llm-gateway.py` (repo root) | An unrelated **FastAPI** `/health` + `/ready` snippet — no relation to this NestJS gateway; an agent-sweep artifact (referenced only by `NEX_AGENT_DELIVERABLE.md`)                                                                             |
+| S2  | `packages/python-sdk/`                                                        | Abandoned Poetry prototype (`from x402 import ChatX402`), unreferenced; superseded by `python/`                                                                                                                                                 |
+| S3  | `packages/x402-sdk-python/`                                                   | Abandoned setuptools prototype (`from x402 import x402Client`), unreferenced; shipped the **same `x402` import name** as S2 — a real packaging collision if either were ever published                                                          |
+| S4  | `k8s/gateway.yaml`                                                            | Stray single manifest, unreferenced; its liveness probe hit the **non-existent** `/api/v1/health` (health is deliberately outside the api prefix)                                                                                               |
+| S5  | `infrastructure/k8s/` (flat manifests + `base/` kustomize set)                | Unreferenced duplicate of `infrastructure/kubernetes/`; contained a broken migration initContainer (`node dist/main.js --migrate-only` — the entry point is `dist/apps/gateway/main.js` and no such flag exists) and `/health` readiness probes |
+
+**Kept:** `python/` (canonical Python SDK — hatchling packaging, full offline
+test suite, LangChain integration) and `infrastructure/kubernetes/` (the only
+manifest set with a README, a migrations Job, and image names matching
+`deploy.yml`). Neither removed tree appeared in `pnpm-lock.yaml` or the Nx
+graph, so the frozen-lockfile install is unaffected.
+
+> `NEX_AGENT_DELIVERABLE.md` pointed only at the removed S1 file and was itself
+> removed in the follow-up pass (§9.5).
+
+### 9.2 Kubernetes manifest defects fixed (`infrastructure/kubernetes/`)
+
+| #   | Defect                                                                                                                                                                                                                                         | Fix                                                                                                                                                                                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Gateway **readinessProbe hit `/health`** — a static liveness answer — so a pod with a dead PostgreSQL or Redis stayed `Ready` and received paid traffic it could not serve                                                                     | Readiness now hits **`/health/ready`** (the only endpoint that probes the dependencies). Liveness deliberately stays on `/health` so a transient dependency outage drains the pod instead of restart-looping it |
+| D2  | ConfigMap set no **`PUBLIC_GATEWAY_URL`**, so 402 quotes/instructions fell back to `http://0.0.0.0:3000` — a URL no client can reach                                                                                                           | Added `PUBLIC_GATEWAY_URL: https://gateway.example.com` (kept in sync with `ingress.yaml`)                                                                                                                      |
+| D3  | ConfigMap set **`NEXT_PUBLIC_GATEWAY_URL: http://gateway:3000`** — doubly wrong: `NEXT_PUBLIC_*` is inlined by Next.js at **build** time (a runtime ConfigMap is a no-op), and the in-cluster `gateway` DNS name is unreachable from a browser | Replaced with a comment explaining it must be baked at image build time using the **public** ingress URL                                                                                                        |
+| D4  | Gateway and dashboard Deployments declared **no `securityContext`** and automounted the default ServiceAccount token                                                                                                                           | Added `runAsNonRoot: true`, `seccompProfile: RuntimeDefault`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, and `automountServiceAccountToken: false` to both                                  |
+
+All `infrastructure/kubernetes/*.yaml` files re-parse cleanly (PyYAML
+`safe_load_all`).
+
+### 9.3 Documentation drift corrected
+
+| #    | Drift                                                                                                                                       | Fix                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Doc1 | `README.md` described `contracts/deployed-addresses.json` as **gitignored** — it is tracked and committed back by the `deploy.yml` workflow | Corrected to state it is committed and refreshed on each `v*` tag                     |
+| Doc2 | `README.md` roadmap marked the **Python SDK** and **Kubernetes manifests** as unfinished (`[ ]`) while both exist and are tested            | Marked complete, with their canonical paths (`python/`, `infrastructure/kubernetes/`) |
+| Doc3 | `AUDIT.md` §8 rows **H8 and H9 were merged onto one line**, breaking the markdown table                                                     | Split into two rows                                                                   |
+
+**Investigated and dismissed:** `.env.example` appeared to begin with a stray
+`[TEMPLATE]` line, but that was a file-read annotation, not file content — no
+change was made.
+
+### 9.4 Verification evidence (this pass)
+
+| Check                                               | Result                                       |
+| --------------------------------------------------- | -------------------------------------------- |
+| `nx run-many --target=lint --all` (15 projects)     | ✅ 0 errors (15 pre-existing warnings)       |
+| `nx run-many --target=test --all` (8 projects)      | ✅ **423 tests / 27 suites**                 |
+| `nx run gateway:test:e2e` (3 suites)                | ✅ **49 tests**                              |
+| `nx build gateway` (`tsc` + esbuild bundle)         | ✅ green                                     |
+| `git ls-files` reference scan for the removed trees | ✅ zero references outside the removed files |
+| `pnpm-lock.yaml` / Nx project graph                 | ✅ no references to the removed packages     |
+| `infrastructure/kubernetes/*.yaml` YAML parse       | ✅ all valid                                 |
+
+**Not verifiable in this environment:** live `kubectl kustomize`/cluster apply
+(no cluster), and Rust `cargo test` (no toolchain) — unchanged and still
+CI-gated. The externally-required items from §1–§8 are unaffected: the
+**independent Soroban contract audit** remains the mainnet gate.
+
+### 9.5 Follow-up implementations (same pass)
+
+The three items left open at the end of §9.1–§9.2 were implemented, followed by a
+second round (§9.6) that surfaced a Docker base-image defect.
+
+| #   | Item                                                                                          | Implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | The dashboard's `NEXT_PUBLIC_GATEWAY_URL` was only _documented_ as needing a build-time value | Wired as a real **Docker build arg**: `Dockerfile.dashboard` declares `ARG`/`ENV` before `nx build dashboard`; `docker-compose.yml` forwards it (default `http://localhost:3000`); `deploy.yml` passes the `NEXT_PUBLIC_GATEWAY_URL` repository variable on `v*` tags; `nx.json` adds `{ "env": "NEXT_PUBLIC_GATEWAY_URL" }` to the `@nx/next:build` inputs so the Nx cache busts when it changes; documented in `DEPLOYMENT.md` and the k8s README                                           |
+| F2  | The surviving k8s set had **no NetworkPolicy or dedicated ServiceAccount**                    | Added `networkpolicy.yaml` (7 policies) — default-deny ingress + egress, DNS egress for all pods, gateway → Postgres/Redis/HTTPS, dashboard → gateway, migration Job → Postgres, Postgres reachable only by the gateway + migration Job, Redis only by the gateway — and `serviceaccount.yaml` (dedicated `x402-gateway` / `x402-dashboard` accounts, both `automountServiceAccountToken: false`). Wired into `kustomization.yaml`; both Deployments and the migration Job now reference them |
+| F3  | `NEX_AGENT_DELIVERABLE.md` was left dangling, pointing at the removed S1 file                 | Removed. `GRANT_SUBMISSION.md` was reviewed and kept — it is internally consistent (its `.github/WAVE8_ISSUES.md` reference exists).                                                                                                                                                                                                                                                                                                                                                          |
+
+**Verified:** the dashboard build arg is inlined into the client bundle (probe
+URL found in the app chunks and `routes-manifest.json`); `docker compose config`
+resolves the forwarded build arg; lint, the 423 unit tests, and the gateway +
+dashboard builds remain green. Manifest and Docker verification is in §9.6.
+
+### 9.6 Readiness gating, manifest CI, and a Docker base-image defect
+
+| #   | Item                                                                                                                                                                                         | Implementation                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F4  | The HTTP tier had no PodDisruptionBudget, and the `maxUnavailable: 0` rollout wasn't soak-gated                                                                                              | Added `poddisruptionbudget.yaml` (`minAvailable: 1` for gateway + dashboard; deliberately **none** for the single-replica Postgres/Redis StatefulSets, where a PDB would only block node drains) plus `minReadySeconds: 10`, `progressDeadlineSeconds: 600`, and `revisionHistoryLimit: 3` on both Deployments                                                                                             |
+| F5  | Kubernetes manifests were never validated in CI                                                                                                                                              | New `kubernetes` CI job: `kubectl kustomize` render → `kubeconform` (pinned v0.8.0 binary, SHA-256-verified against the release `CHECKSUMS`) schema validation → `scripts/validate-kubernetes.py`, which asserts `/health/ready` readiness gating, PDB coverage, resolvable `serviceAccountName`s, and NetworkPolicy presence                                                                              |
+| F6  | The dashboard build arg could silently regress (ARG/ENV moved below the build step → fallback URL shipped)                                                                                   | New `dashboard-build-arg` CI job builds the dashboard **builder stage** with a probe `NEXT_PUBLIC_GATEWAY_URL` and asserts the value appears in the built bundle                                                                                                                                                                                                                                           |
+| F7  | **Defect found by F6: both Docker images were unbuildable.** `docker build` died at `pnpm install --frozen-lockfile` with `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite` | The Dockerfiles used `node:20-alpine` + `corepack prepare pnpm@11` (→ pnpm 11.24, which imports `node:sqlite` and needs Node ≥ 22.13). CI had already been fixed for this (Node 22 runners, pinned pnpm 11.24.0); the Dockerfiles were missed. Both fixed to `node:22-alpine` with `pnpm@11.24.0` pinned — this had silently broken `docker compose build` and the tag-triggered `deploy.yml` image builds |
+
+**Verified:** `kubectl kustomize infrastructure/kubernetes` renders **24
+resources** (2 Deployments, 2 StatefulSets, 7 NetworkPolicies, 2
+PodDisruptionBudgets, 2 ServiceAccounts, Job, Ingress, ConfigMap, Secret,
+Namespace, 4 Services); `scripts/validate-kubernetes.py` passes on the render
+and **exits 1** on tampered input (readiness path changed, PDBs removed); both
+Docker **builder stages build** end-to-end on `node:22-alpine`, with the probe
+URL inlined into 20 bundle files; `kubeconform -strict` reports **24/24 valid**
+against the render. The only step that stays cluster-only is a live
+`kubectl apply` / node drain, which needs a real cluster.
+
+### 9.7 Container runtime smoke test — a second Docker defect
+
+§9.6 proved the _builder_ stage. This pass built and booted the **full gateway
+image** against real Postgres + Redis — and it crash-looped at startup:
+
+> `PrismaClientInitializationError: Unable to require(...libquery_engine-linux-musl.so.node)`
+> — `Error loading shared library libssl.so.1.1: No such file or directory`
+
+Prisma selects which libssl variant of its query engine to download by probing
+the build host for the `openssl` **CLI**. Alpine's node image ships `libssl.so.3`
+but not the CLI, so detection failed and the generator silently produced the
+**OpenSSL 1.1** engine. Installing `openssl` in the builder alone then produced a
+second mismatch — the builder generated `linux-musl-openssl-3.0.x` while the
+runtime, still CLI-less, detected the generic `linux-musl` and could not find it.
+
+**F8 — Fix:** install `openssl` in **both** stages of `Dockerfile.gateway`
+(builder, before `prisma generate`; and runtime). The image now ships
+`libquery_engine-linux-musl-openssl-3.0.x.so.node` and boots. Like F7 this was
+masked by the Node/pnpm failure — the image could never get far enough to hit it.
+
+**Smoke-test evidence** — full image, real Postgres 16 + Redis 7, `NODE_ENV=production`:
+
+| Check                                                      | Result                                                                                                          |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| container user                                             | `uid=1000(node)` — non-root, as designed                                                                        |
+| `GET /health/live`                                         | 200                                                                                                             |
+| `GET /health/ready`                                        | 200 · `database: ok (86 ms)` · `redis: ok`                                                                      |
+| `GET /metrics`                                             | 200                                                                                                             |
+| `GET /api/docs`                                            | 200 (Swagger)                                                                                                   |
+| `POST /api/v1/chat/completions` (route configured, unpaid) | **402** with a well-formed quote (amount `1000000`, USDC + Circle testnet issuer, memo, `issuedAt`/`expiresAt`) |
+| quote `statusUrl`                                          | used `PUBLIC_GATEWAY_URL` — independently validates the §9.2 configmap fix                                      |
+| `POST` for an unknown model                                | **404** `No route configured for model: …`                                                                      |
+| `x402_quotes_generated_total`                              | incremented to 1                                                                                                |
+| security headers                                           | CSP, `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`                                           |
+
+Also verified incidentally: `prisma migrate deploy` applies every migration to a
+fresh database — the path the k8s migration Job and the backup/restore drill use.
+
+### 9.8 CI guard for the gateway image
+
+Both Docker defects (F7, F8) were invisible without actually building _and_
+running the image, so a new **`gateway-image`** CI job does exactly that on every
+PR: build both stages, boot the container against Postgres + Redis service
+containers, assert `/health/live` and `/health/ready` return 200 (readiness runs
+`SELECT 1` through Prisma — the precise failure mode of F8), and assert the
+process is non-root. The job's runner sequence was executed verbatim during this
+pass and passes: readiness `database: ok (64 ms)`, `redis: ok`, `uid=1000`.
+
+CI now has **16 jobs**. The three added across §9.6–§9.8 (`kubernetes`,
+`dashboard-build-arg`, `gateway-image`) turn the manifest and container
+regressions found in this pass into permanent, self-checking gates.
+
+### 9.9 Deploy-path defect: the k8s migration Job could not run
+
+With the image finally bootable, the next thing to verify was the schema path the
+cluster uses. `infrastructure/kubernetes/migrations-job.yaml` overrides the
+gateway image's command with `npx --no-install prisma migrate deploy --schema
+packages/database/prisma/schema.prisma`. Running that verbatim against the real
+image:
+
+> `npm error npx canceled due to missing packages and no YES option: ["prisma@8.0.0-rc.14"]`
+
+**F9 — cause:** the Prisma CLI is not at `/app/node_modules/.bin/prisma` — pnpm's
+isolated layout puts binaries in each package's own `.bin`
+(`/app/packages/database/node_modules/.bin/prisma`) — so `npx --no-install` found
+no local CLI and tried to **download Prisma 8** from the registry. In a cluster
+with no egress the Job fails outright; on a node that can reach the registry it
+would run the _wrong_ Prisma version against the production schema.
+
+**Fix:** set `workingDir: /app/packages/database` on the Job container and use
+the package-relative schema. Verified on a fresh database: **0 → 11 tables**.
+The `gateway-image` CI job now applies migrations with this exact command before
+booting the gateway, so the deploy path is exercised on every PR — previously it
+was never executed anywhere.

@@ -504,7 +504,7 @@ bash scripts/build-contracts.sh
 STELLAR_NETWORK=testnet STELLAR_SECRET_KEY=S... bash scripts/deploy-contracts.sh
 ```
 
-`deploy-contracts.sh` builds all three contracts, deploys them to the target network, and records the contract IDs in `contracts/deployed-addresses.json` (gitignored — it is a per-environment deploy artifact). The gateway reads this file at startup via `@x402/config` and falls back to hardcoded testnet IDs when it is missing.
+`deploy-contracts.sh` builds all three contracts, deploys them to the target network, and records the contract IDs in `contracts/deployed-addresses.json` (committed to the repo and refreshed by the `deploy.yml` workflow on each `v*` tag, so the file always reflects the live instances). The gateway reads this file at startup via `@x402/config` and falls back to hardcoded testnet IDs when it is missing.
 
 The contracts store unbounded state (payment audit trail, escrow
 balances/usage, multisig proposals) as individual **persistent ledger
@@ -609,8 +609,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete step-by-step guide.
 - [x] Per-token underpayment enforcement (debt gating, top-up quotes, completion cap)
 - [x] Mainnet hardening (boot guards, path-payment restriction, persistent-storage contracts)
 - [ ] Multi-provider routing with load balancing
-- [ ] Python SDK with LangChain integration
-- [ ] Kubernetes deployment manifests
+- [x] Python SDK with LangChain integration (`python/`)
+- [x] Kubernetes deployment manifests (`infrastructure/kubernetes/`)
 - [x] Provider payout automation via multisig contracts
 - [ ] Prepaid credit escrow contract integration (opt-in experimental today — see [MAINNET_READINESS.md](./MAINNET_READINESS.md))
 

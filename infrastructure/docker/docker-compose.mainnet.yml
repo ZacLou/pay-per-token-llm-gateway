@@ -101,11 +101,15 @@ services:
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.dashboard
+      args:
+        # Inlined into the client bundle at BUILD time (Next.js NEXT_PUBLIC_*).
+        # Set NEXT_PUBLIC_GATEWAY_URL to the PUBLIC gateway URL a browser can
+        # reach — never the in-cluster `gateway` DNS name.
+        NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:?NEXT_PUBLIC_GATEWAY_URL is required for the dashboard build}
     ports:
       - '3001:3001'
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_GATEWAY_URL: http://gateway:3000
     depends_on:
       gateway:
         condition: service_healthy

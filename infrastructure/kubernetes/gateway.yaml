@@ -34,6 +34,14 @@ spec:
     rollingUpdate:
       maxUnavailable: 0
       maxSurge: 1
+  # Readiness-gated rollout: with maxUnavailable: 0 a new pod must become Ready
+  # (readinessProbe: /health/ready) before the old one is removed, and
+  # minReadySeconds adds a short soak so a flapping pod can't be declared
+  # available. progressDeadlineSeconds fails a rollout that can't finish —
+  # startup can legitimately take ~5 min while migrations/warm-up complete.
+  minReadySeconds: 10
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: gateway
@@ -43,10 +51,21 @@ spec:
         app.kubernetes.io/name: gateway
         app.kubernetes.io/part-of: x402
     spec:
+      # Dedicated ServiceAccount; no Kubernetes API access is needed.
+      serviceAccountName: x402-gateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: gateway
           image: x402/gateway:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ['ALL']
           ports:
             - name: http
               containerPort: 3000
@@ -67,14 +86,21 @@ spec:
             limits:
               cpu: 1
               memory: 1Gi
+          # Readiness must hit /health/ready — that is the only endpoint that
+          # actually probes Postgres + Redis. /health is a static liveness
+          # answer, so using it here would keep a pod with a dead database or
+          # Redis "Ready" and route paid traffic into failing requests.
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
+          # Liveness deliberately stays on /health: it must NOT fail when a
+          # dependency is down, or Kubernetes would restart-loop the pod
+          # through a transient database/Redis outage instead of draining it.
           livenessProbe:
             httpGet:
               path: /health

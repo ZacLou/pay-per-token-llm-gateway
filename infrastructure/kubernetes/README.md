@@ -27,18 +27,22 @@ namespace isolation, TLS ingress, resource limits, and health probes.
                     └───────────────────┘
 ```
 
-| Component | Kind        | Replicas | Port | Persistence | Probes                         |
-| --------- | ----------- | -------- | ---- | ----------- | ------------------------------ |
-| gateway   | Deployment  | 2        | 3000 | —           | `/health` (ready/live/startup) |
-| dashboard | Deployment  | 2        | 3001 | —           | `/` (ready/live/startup)       |
-| postgres  | StatefulSet | 1        | 5432 | 10Gi PVC    | `pg_isready`                   |
-| redis     | StatefulSet | 1        | 6379 | 1Gi PVC     | `redis-cli ping`               |
+| Component | Kind        | Replicas | Port | Persistence | Probes                                                    |
+| --------- | ----------- | -------- | ---- | ----------- | --------------------------------------------------------- |
+| gateway   | Deployment  | 2        | 3000 | —           | `/health/ready` (readiness), `/health` (liveness/startup) |
+| dashboard | Deployment  | 2        | 3001 | —           | `/` (ready/live/startup)                                  |
+| postgres  | StatefulSet | 1        | 5432 | 10Gi PVC    | `pg_isready`                                              |
+| redis     | StatefulSet | 1        | 6379 | 1Gi PVC     | `redis-cli ping`                                          |
 
 ## Prerequisites
 
 - A Kubernetes cluster (kind, k3s, minikube, EKS, GKE, …) with `kubectl`.
 - An ingress-nginx controller (`kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml`), or change `ingressClassName` in `ingress.yaml` to your controller.
 - Docker images built and pushed (`.github/workflows/deploy.yml` publishes `x402/gateway` and `x402/dashboard` on version tags).
+- The dashboard image must be built with the **public** gateway URL baked in,
+  because Next.js inlines `NEXT_PUBLIC_*` at build time (a runtime ConfigMap
+  or env var cannot set it):
+  `docker build --build-arg NEXT_PUBLIC_GATEWAY_URL=https://gateway.example.com -f infrastructure/docker/Dockerfile.dashboard .`
 - A Stellar network account (testnet) and upstream LLM API keys — see the repo's `.env.example` / `DEPLOYMENT.md`.
 
 ## Deploy

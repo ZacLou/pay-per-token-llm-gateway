@@ -1,9 +1,11 @@
 # ── Build Stage ──
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@11 --activate
+# Node 22 (matching .nvmrc) + the exact pnpm CI uses. pnpm 11.24 needs Node
+# >= 22.13 (it imports `node:sqlite`), so a Node 20 base fails to install.
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 # Copy root workspace files needed for pnpm install
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml nx.json tsconfig.base.json ./
@@ -27,12 +29,23 @@ COPY apps/dashboard/package.json apps/dashboard/
 COPY packages/ packages/
 COPY apps/dashboard/ apps/dashboard/
 
-# Install dependencies and build
+# Install dependencies
 RUN pnpm install --frozen-lockfile
+
+# ── Build-time public configuration ──
+# NEXT_PUBLIC_* variables are inlined into the dashboard's client bundle by
+# Next.js at BUILD time — they are never read from the container environment
+# at runtime, so setting one via Kubernetes ConfigMap/env has no effect. Bake
+# the public gateway URL into the image here instead. It MUST be a URL the
+# *browser* can reach (the ingress host), not an in-cluster Service DNS name.
+ARG NEXT_PUBLIC_GATEWAY_URL=http://localhost:3000
+ENV NEXT_PUBLIC_GATEWAY_URL=$NEXT_PUBLIC_GATEWAY_URL
+
+# Build dashboard
 RUN pnpm exec nx build dashboard
 
 # ── Production Stage ──
-FROM node:20-alpine
+FROM node:22-alpine
 
 LABEL org.opencontainers.image.title="x402 Provider Dashboard" \
       org.opencontainers.image.description="Provider dashboard for the x402 LLM gateway" \

@@ -21,14 +21,26 @@ spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 3600
   template:
+    metadata:
+      # The label is what the Postgres NetworkPolicy allows through.
+      labels:
+        app.kubernetes.io/name: prisma-migrate
+        app.kubernetes.io/part-of: x402
     spec:
       restartPolicy: OnFailure
+      serviceAccountName: x402-gateway
+      automountServiceAccountToken: false
       containers:
         - name: prisma-migrate
           image: x402/gateway:latest
           imagePullPolicy: Always
-          # --schema: the image CWD is /app; the workspace schema ships at
-          # packages/database/prisma/schema.prisma (with its migrations/ dir).
+          # The Prisma CLI lives in the workspace package's OWN .bin
+          # (pnpm's isolated layout puts binaries in the package, not the root
+          # node_modules), so run from the package directory. Without this,
+          # `npx --no-install prisma` finds no local CLI and tries to download
+          # a different Prisma from the network — which fails in a cluster with
+          # no egress and would apply the wrong schema version.
+          workingDir: /app/packages/database
           command:
             [
               'npx',
@@ -37,7 +49,7 @@ spec:
               'migrate',
               'deploy',
               '--schema',
-              'packages/database/prisma/schema.prisma',
+              'prisma/schema.prisma',
             ]
           envFrom:
             - secretRef:

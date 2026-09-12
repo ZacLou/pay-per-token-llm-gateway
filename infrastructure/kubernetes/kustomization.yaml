@@ -11,9 +11,12 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - secret.yaml
+  - serviceaccount.yaml
   - postgres.yaml
   - redis.yaml
   - gateway.yaml
   - dashboard.yaml
   - ingress.yaml
   - migrations-job.yaml
+  - networkpolicy.yaml
+  - poddisruptionbudget.yaml

@@ -76,6 +76,14 @@ jobs:
           tags: |
             x402/dashboard:latest
             x402/dashboard:${{ steps.version.outputs.VERSION }}
+          # Next.js inlines NEXT_PUBLIC_* into the client bundle at BUILD time,
+          # so the dashboard's public gateway URL must be baked in here (a
+          # runtime ConfigMap/env cannot change it). Set the repository
+          # variable NEXT_PUBLIC_GATEWAY_URL to the PUBLIC gateway URL (e.g.
+          # https://gateway.example.com); when unset the image falls back to
+          # http://localhost:3000 for local use.
+          build-args: |
+            NEXT_PUBLIC_GATEWAY_URL=${{ vars.NEXT_PUBLIC_GATEWAY_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

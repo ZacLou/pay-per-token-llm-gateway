@@ -63,6 +63,12 @@ services:
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.dashboard
+      args:
+        # Inlined into the client bundle at BUILD time (Next.js NEXT_PUBLIC_*).
+        # The browser reaches the gateway on the host's published port, so this
+        # must be a URL the browser can resolve — not the in-cluster `gateway`
+        # DNS name, which a browser cannot see.
+        NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}
     ports:
       - '3001:3001'
     healthcheck:
@@ -73,7 +79,6 @@ services:
       retries: 5
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_GATEWAY_URL: http://gateway:3000
     depends_on:
       gateway:
         condition: service_healthy
