@@ -35,27 +35,61 @@ jobs:
     needs: [check-ci]
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
+    # `secrets` is not available in step-level `if:` expressions, so bridge the
+    # presence check through job env — the same pattern deploy_contracts uses
+    # for HAS_STELLAR_SECRET. Without it, a release tag with Docker Hub
+    # credentials unset dies inside docker/login-action with an opaque
+    # authentication error instead of saying what is missing.
+    env:
+      HAS_DOCKER_CREDENTIALS: ${{ secrets.DOCKER_USERNAME != '' }}
     steps:
+      # Unlike the Vercel workflow, skipping here means a release produced no
+      # images at all, so the notice is explicit that the release is incomplete.
+      - name: Docker Hub credentials not configured — skipping image push
+        if: env.HAS_DOCKER_CREDENTIALS != 'true'
+        run: |
+          {
+            echo "### Docker image push skipped"
+            echo ""
+            echo "\`DOCKER_USERNAME\` is not set, so **no release images were built or pushed** for this tag."
+            echo "This is a configuration gap, not a build failure — but the release is incomplete until it is fixed."
+            echo ""
+            echo "Add these repository secrets under *Settings → Secrets and variables → Actions*,"
+            echo "then re-run this workflow (or push the tag again):"
+            echo ""
+            echo "| Secret | Value |"
+            echo "| --- | --- |"
+            echo "| \`DOCKER_USERNAME\` | Docker Hub account name |"
+            echo "| \`DOCKER_PASSWORD\` | Docker Hub access token (not the account password) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=Release images not pushed::DOCKER_USERNAME is not set — no images were pushed for $GITHUB_REF_NAME."
+
       - uses: actions/checkout@v4
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
 
       - name: Read Node version from .nvmrc
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         id: nvm
         run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract version
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Build & push gateway
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -68,6 +102,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push dashboard
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .

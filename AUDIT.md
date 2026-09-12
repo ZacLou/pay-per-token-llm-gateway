@@ -508,6 +508,38 @@ proven non-vacuous by feeding it a control file containing the
 extracted and executed standalone: it emits the warning annotation and renders the
 setup table into `$GITHUB_STEP_SUMMARY`.
 
-**Not changed (flagged only):** `deploy.yml`'s `docker` job has the same latent
-trap with `DOCKER_USERNAME` / `DOCKER_PASSWORD`, but it is tag-gated rather than
-push-triggered, so it is not producing noise today.
+**Not changed there (flagged only):** `deploy.yml`'s `docker` job has the same
+latent trap with `DOCKER_USERNAME` / `DOCKER_PASSWORD`, but it is tag-gated rather
+than push-triggered, so it is not producing noise today.
+
+### 9.11 The same guard applied to the release path (`deploy.yml`)
+
+The `docker` job logs into Docker Hub with `DOCKER_USERNAME` / `DOCKER_PASSWORD`.
+Those credentials are unset, and the shape of the failure is identical to F10:
+`docker/login-action` fails with an opaque authentication error instead of
+stating that the secrets are missing.
+
+This one was **latent rather than noisy**: the `Deploy` workflow has never run at
+all — the repository has no tags (`git tag -l` is empty), so this release path has
+executed zero times. That is itself worth noting, since everything in `deploy.yml`
+is untested.
+
+**Fix:** the job bridges the same presence check through job env
+(`HAS_DOCKER_CREDENTIALS`), skips the push, and reports it — following the
+convention already set inside this same file by
+`deploy_contracts` / `HAS_STELLAR_SECRET`.
+
+**Deliberate difference from §9.10:** skipping the Vercel deploy is harmless (it
+runs on every push to `main` and simply does not publish a preview). Skipping
+_this_ job means a release produced **no images at all**, so the notice states that
+explicitly and the warning annotation includes the tag via `$GITHUB_REF_NAME`. It
+must not be mistaken for a normal green release.
+
+**Evidence:** actionlint clean; the step's shell extracted and executed with
+`GITHUB_REF_NAME=v1.2.3` — it emits the tag-scoped warning and renders the setup
+table. `.nvmrc` is `22`, so unlike the Dockerfiles there is no Node/pnpm mismatch
+on this path.
+
+**Noted, left alone:** the `docker` job's `Read Node version from .nvmrc` step is
+vestigial — its output is never consumed, since both images are built inside
+Docker rather than with the runner's Node. Left in place to keep the diff minimal.
