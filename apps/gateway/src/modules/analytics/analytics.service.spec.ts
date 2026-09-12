@@ -305,6 +305,62 @@ describe('AnalyticsService', () => {
       expect([...timestamps].sort()).toEqual(timestamps);
     });
 
+    it('aligns buckets to interval boundaries so SQL rows are never dropped (unaligned now)', async () => {
+      // Regression: with an unaligned wall-clock time (12:34:56), the old
+      // zero-filled map started at `now − duration` (12:34:56) while SQL
+      // grouped on whole-hour boundaries (12:00:00) — every aggregated row
+      // missed its map key and analytics silently showed zero. Both sides
+      // must snap to the same interval grid.
+      mockOwnedProviders();
+      const now = new Date('2026-08-10T12:34:56.789Z');
+      jest.useFakeTimers({ now });
+
+      const intervalMs = 60 * 60 * 1000;
+      const alignedStart =
+        Math.floor((now.getTime() - 24 * 60 * 60 * 1000) / intervalMs) * intervalMs;
+      const bucketSec = Math.floor((alignedStart + 2 * intervalMs) / 1000 / 3600) * 3600;
+      (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([
+        {
+          bucket_epoch: BigInt(bucketSec),
+          paid_requests: BigInt(3),
+          unpaid_requests: BigInt(1),
+          revenue: BigInt(777),
+          failed_verifications: BigInt(2),
+        },
+      ]);
+
+      const series = await service.getTimeSeries(providerId, OWNER, 60, 24);
+
+      const point = series.find((p) => p.timestamp === new Date(bucketSec * 1000).toISOString());
+      expect(point).toBeDefined();
+      expect(point?.paidRequests).toBe(3);
+      expect(point?.unpaidRequests).toBe(1);
+      expect(point?.revenue).toBe('777');
+      expect(point?.failedVerifications).toBe(2);
+
+      // Every emitted bucket sits exactly on the interval grid.
+      for (const p of series) {
+        expect(new Date(p.timestamp).getTime() % intervalMs).toBe(0);
+      }
+    });
+
+    it('clamps the window correctly for sub-hour intervals', async () => {
+      mockOwnedProviders();
+      const now = new Date('2026-08-10T12:07:30.000Z');
+      jest.useFakeTimers({ now });
+      (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+      const series = await service.getTimeSeries(providerId, OWNER, 15, 1);
+
+      const intervalMs = 15 * 60 * 1000;
+      // (12:07:30 − 1h) = 11:07:30 → aligned to 11:00; through 12:00 → 5 buckets.
+      expect(series).toHaveLength(5);
+      expect(series[0].timestamp).toBe(new Date('2026-08-10T11:00:00.000Z').toISOString());
+      for (const p of series) {
+        expect(new Date(p.timestamp).getTime() % intervalMs).toBe(0);
+      }
+    });
+
     it('throws NotFoundException for a provider the wallet does not own', async () => {
       mockOwnedProviders(['provider-1']);
 

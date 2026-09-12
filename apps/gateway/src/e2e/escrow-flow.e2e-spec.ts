@@ -131,6 +131,15 @@ jest.mock('@x402/database', () => ({
       aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0n }, _avg: { responseTime: 0 } }),
       groupBy: jest.fn().mockResolvedValue([]),
     },
+    // Persisted in-app notifications (Postgres-backed dashboard feed).
+    notification: {
+      create: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   },
   Prisma: {},
 }));

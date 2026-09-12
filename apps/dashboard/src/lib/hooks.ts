@@ -13,12 +13,18 @@ import {
   deleteRoute,
   createProvider,
   updateProvider,
+  fetchNotifications,
+  fetchUnreadNotificationCount,
+  markNotificationRead,
+  markAllNotificationsRead,
   type ProviderResponse,
   type RouteResponse,
   type AnalyticsSummary,
   type TimeSeriesPoint,
   type PaginatedPayments,
   type PaginatedAuditLogs,
+  type PaginatedNotifications,
+  type InAppNotification,
 } from './api';
 
 // ── Query Key Factory ────────────────────────
@@ -30,7 +36,49 @@ export const queryKeys = {
     ['payments', params] as const,
   routes: (providerId?: string) => ['routes', providerId] as const,
   auditLogs: (params?: { page?: number; limit?: number }) => ['auditLogs', params] as const,
+  notifications: (params?: { providerId?: string; unreadOnly?: boolean }) =>
+    ['notifications', params] as const,
+  unreadNotifications: ['notifications', 'unread-count'] as const,
 };
+
+// ── Notifications ─────────────────────────────
+
+export function useNotifications(params?: { providerId?: string; unreadOnly?: boolean }) {
+  return useQuery<PaginatedNotifications>({
+    queryKey: queryKeys.notifications(params),
+    queryFn: () => fetchNotifications(params),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useUnreadNotificationCount() {
+  return useQuery<{ unread: number }>({
+    queryKey: queryKeys.unreadNotifications,
+    queryFn: () => fetchUnreadNotificationCount(),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation<InAppNotification, Error, string>({
+    mutationFn: (id: string) => markNotificationRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation<{ updated: number }, Error, string | undefined>({
+    mutationFn: (providerId?: string) => markAllNotificationsRead(providerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
 
 // ── Provider ──────────────────────────────────
 

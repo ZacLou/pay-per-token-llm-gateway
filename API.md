@@ -13,10 +13,11 @@
 - **Amounts**: always stroops (1 USDC = 10000000 stroops; 7 decimals).
 - **Auth**: protected endpoints accept the `x402-session` httpOnly cookie or
   an `Authorization: Bearer <jwt>` header.
-- **Rate limiting**: per-IP sliding window. Unpaid tier
-  (`RATE_LIMIT_WINDOW`/`RATE_LIMIT_MAX`, default 10 req / 60 s); paid tier
-  (requests carrying a _confirmed_ `X-Payment-Hash`) gets 10× the budget in
-  2× the window.
+- **Rate limiting**: sliding window. Unpaid tier is per client IP
+  (`RATE_LIMIT_WINDOW`/`RATE_LIMIT_MAX`, default 10 req / 60 s); the paid tier
+  (requests carrying a _confirmed_ `X-Payment-Hash`) is keyed by the
+  server-verified payer wallet and gets 10× the budget in 2× the window.
+  Proxy headers are only honoured when `TRUST_PROXY` is explicitly set.
 
 ---
 
@@ -171,9 +172,13 @@ Pricing validation: `flat` requires `flatPrice`; `per_token` requires
 
 ## 10. Webhooks
 
-| Method | Path                    | Notes                                                    |
-| ------ | ----------------------- | -------------------------------------------------------- |
-| `POST` | `/api/v1/webhooks/test` | `{ webhookUrl, payload }` — SSRF-validated test delivery |
+| Method | Path                                 | Notes                                                                                         |
+| ------ | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `POST` | `/api/v1/webhooks/test`              | `{ webhookUrl, payload }` — SSRF-validated test delivery                                      |
+| `GET`  | `/api/v1/notifications`              | Persisted in-app notifications for the wallet (`providerId`, `unreadOnly`, `limit`, `offset`) |
+| `GET`  | `/api/v1/notifications/unread-count` | `{ unread }` badge count                                                                      |
+| `POST` | `/api/v1/notifications/:id/read`     | Mark one notification read (ownership-scoped)                                                 |
+| `POST` | `/api/v1/notifications/read-all`     | Mark all read (optional `providerId`)                                                         |
 
 Outbound webhooks (`payment_received`, `verification_failed`,
 `request_forwarded`) are HMAC-SHA256 signed with the provider's

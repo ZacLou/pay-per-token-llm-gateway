@@ -2,7 +2,7 @@
 // every non-test environment, known placeholder secrets are rejected, and the
 // explicit AUTH_DEV_MODE / TRUST_PROXY switches are read from the environment.
 
-import { loadConfig, validateEnv, getConfig, setConfig } from './index';
+import { loadConfig, validateEnv, getConfig, setConfig, parseTrustProxy } from './index';
 
 describe('config security hardening', () => {
   const originalEnv = { ...process.env };
@@ -76,7 +76,7 @@ describe('config security hardening', () => {
       expect(config.security.trustProxy).toBe('loopback');
     });
 
-    it('defaults authDevMode to false and trustProxy to "1"', () => {
+    it('defaults authDevMode to false and trustProxy to false (do not trust proxies)', () => {
       process.env.NODE_ENV = 'test';
       process.env.JWT_SECRET = 'a-real-random-256-bit-secret';
       delete process.env.AUTH_DEV_MODE;
@@ -84,7 +84,27 @@ describe('config security hardening', () => {
 
       const config = loadConfig();
       expect(config.security.authDevMode).toBe(false);
-      expect(config.security.trustProxy).toBe('1');
+      // Secure default: proxy headers are ignored unless explicitly opted in.
+      expect(config.security.trustProxy).toBe(false);
+    });
+
+    it('parses TRUST_PROXY into explicit hop / host forms', () => {
+      expect(parseTrustProxy(undefined)).toBe(false);
+      expect(parseTrustProxy('')).toBe(false);
+      expect(parseTrustProxy('false')).toBe(false);
+      expect(parseTrustProxy('0')).toBe(false);
+      expect(parseTrustProxy('1')).toBe(1);
+      expect(parseTrustProxy('2')).toBe(2);
+      expect(parseTrustProxy('loopback')).toBe('loopback');
+      expect(parseTrustProxy('127.0.0.1,10.0.0.1')).toBe('127.0.0.1,10.0.0.1');
+    });
+
+    it('does not trust proxies when TRUST_PROXY is an explicit false', () => {
+      process.env.NODE_ENV = 'test';
+      process.env.JWT_SECRET = 'a-real-random-256-bit-secret';
+      process.env.TRUST_PROXY = 'false';
+
+      expect(loadConfig().security.trustProxy).toBe(false);
     });
 
     it('defaults payoutAutomationEnabled to false and reads it from PAYOUT_AUTOMATION_ENABLED', () => {

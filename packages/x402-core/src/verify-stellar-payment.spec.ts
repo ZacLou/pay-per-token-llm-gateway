@@ -138,7 +138,12 @@ describe('amount unit conversion (units ↔ stroops)', () => {
   });
 });
 
-function verify(opts: { quote: Quote; txHash?: string; allowPathPayments?: boolean }) {
+function verify(opts: {
+  quote: Quote;
+  txHash?: string;
+  allowPathPayments?: boolean;
+  minPaymentAmount?: string;
+}) {
   return verifyStellarPayment({
     txHash: opts.txHash ?? TX_HASH,
     quote: opts.quote,
@@ -147,6 +152,9 @@ function verify(opts: { quote: Quote; txHash?: string; allowPathPayments?: boole
     networkPassphrase: 'Test SDF Network ; September 2015',
     ...(opts.allowPathPayments !== undefined && {
       allowPathPayments: opts.allowPathPayments,
+    }),
+    ...(opts.minPaymentAmount !== undefined && {
+      minPaymentAmount: opts.minPaymentAmount,
     }),
   });
 }
@@ -493,6 +501,31 @@ describe('verifyStellarPayment', () => {
       expect(result.failureReason).toBe(
         'Payment amount is below the quoted deposit of 2048000 USDC',
       );
+    });
+
+    it('enforces the global minPaymentAmount floor on a zero-priced flat route', async () => {
+      // A route with flatPrice=0 yields a 0-stroop quote; without the global
+      // floor, `requiredAmount` would be 1 stroop and access would be free.
+      const route = makeRoute({ flatPrice: '0' });
+      const quote = makeQuote(route);
+      expect(quote.amount).toBe('0');
+
+      // 5 stroops — below the 10,000-stroop minimum → rejected.
+      (global as any).fetch = mockHorizonFetch({
+        tx: txData({}, quote),
+        ops: opsData([paymentOp({ amount: '0.0000005' })]),
+      });
+      const rejected = await verify({ quote, minPaymentAmount: '10000' });
+      expect(rejected.verified).toBe(false);
+
+      // Exactly the minimum satisfies the floor.
+      (global as any).fetch = mockHorizonFetch({
+        tx: txData({}, quote),
+        ops: opsData([paymentOp({ amount: '0.0010000' })]),
+      });
+      const accepted = await verify({ quote, minPaymentAmount: '10000' });
+      expect(accepted.verified).toBe(true);
+      expect(accepted.amount).toBe('10000');
     });
 
     it('accepts a per-token payment when any operation in the tx covers the deposit', async () => {

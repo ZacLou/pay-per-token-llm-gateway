@@ -190,17 +190,21 @@ model PayoutProposal {
 // ── Notifications ────────────────────────────
 
 model Notification {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   providerId String
   event      String
-  channel    String   // "email" | "webhook" | "in_app"
+  channel    String // "email" | "webhook" | "in_app"
   payload    Json
-  sent       Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  sent       Boolean   @default(false)
+  /// In-app read state, used by the dashboard notification feed.
+  read       Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
 
   provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@index([providerId])
+  @@index([providerId, read])
   @@index([sent])
   @@index([createdAt])
 }

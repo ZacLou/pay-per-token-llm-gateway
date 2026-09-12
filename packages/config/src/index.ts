@@ -172,10 +172,14 @@ export interface GatewayConfig {
     /**
      * Express `trust proxy` setting, used to resolve the real client IP
      * behind Cloudflare/NGINX/Railway for IP-based rate limiting.
-     * Examples: "1" (default, trust first hop), "loopback", or a
-     * comma-separated list of proxy IPs.
+     *
+     * **Disabled by default (`false`).** Trusting proxy headers when the
+     * gateway is directly reachable lets any client forge `X-Forwarded-For`
+     * and bypass IP rate limiting, so trusting a proxy is an explicit opt-in:
+     * set `TRUST_PROXY`, e.g. `1` (first hop), `loopback`, or a
+     * comma-separated hop count / proxy IP list.
      */
-    trustProxy: string;
+    trustProxy: string | number | false;
     /**
      * When true, new providers start inactive and require an admin approve
      * call (POST /providers/:id/approve) before they can serve traffic.
@@ -413,6 +417,24 @@ export function validateEnv(): void {
 }
 
 /**
+ * Parse the `TRUST_PROXY` environment variable into an Express-compatible
+ * `trust proxy` value.
+ *
+ * Returns `false` (the Express default — trust nothing) when unset, empty, or
+ * an explicit `false`/`0`, so a directly-exposed gateway can never be tricked
+ * into honouring a forged `X-Forwarded-For`. Numeric strings become numbers
+ * (hop count); everything else (e.g. `loopback`, `uniquelocal`, a proxy IP
+ * list) is passed through to Express as a string.
+ */
+export function parseTrustProxy(raw: string | undefined): string | number | false {
+  if (raw === undefined) return false;
+  const value = raw.trim();
+  if (value === '' || value.toLowerCase() === 'false' || value === '0') return false;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value;
+}
+
+/**
  * Load configuration from environment variables with sane defaults.
  */
 export function loadConfig(): GatewayConfig {
@@ -447,6 +469,18 @@ export function loadConfig(): GatewayConfig {
   // points at a test/future network, a foreign passphrase, or a non-Circle
   // USDC issuer.
   assertMainnetNetworkConsistency();
+
+  // Resolve TRUST_PROXY explicitly. Unset (or an explicit "false"/"0") means
+  // "do not trust proxy headers" — the safe default. A numeric value means
+  // "trust N hops"; anything else is passed through to Express verbatim
+  // (e.g. "loopback" or a comma-separated proxy IP list).
+  const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+
+  // Refuse the two configurations that silently defeat IP-based rate
+  // limiting: trusting proxy headers while the gateway is NOT actually
+  // behind a proxy is impossible to detect, so instead we require an
+  // explicit opt-in for production and document the risk. (No hard failure —
+  // a correctly configured reverse-proxy deploy legitimately sets it.)
 
   return {
     port: parseInt(process.env.PORT || '3000', 10),
@@ -509,7 +543,7 @@ export function loadConfig(): GatewayConfig {
       sessionDuration: parseInt(process.env.SESSION_DURATION || '86400', 10),
       corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:3001').split(','),
       authDevMode: process.env.AUTH_DEV_MODE === 'true',
-      trustProxy: process.env.TRUST_PROXY || '1',
+      trustProxy,
       providerApprovalRequired: process.env.PROVIDER_APPROVAL_REQUIRED === 'true',
       allowPayoutEqualsAuthWallet: process.env.ALLOW_PAYOUT_EQUALS_AUTH_WALLET === 'true',
     },

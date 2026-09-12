@@ -4,6 +4,61 @@ All notable changes to the x402 LLM Gateway project.
 
 ---
 
+## [Unreleased] — 2026-09-12
+
+### Security
+
+- **Explicit `TRUST_PROXY`:** the Express `trust proxy` setting is now
+  **disabled by default** (forwarding headers ignored) instead of defaulting to
+  `1`. A directly-exposed gateway can no longer be tricked into honouring a
+  forged `X-Forwarded-For`; production starts log a warning when it is unset.
+  Set `TRUST_PROXY=1`/`loopback`/a proxy IP list only behind a real proxy.
+- **Wallet-based rate limiting:** the paid tier is now keyed by the
+  server-verified payer wallet on the confirmed payment row, not the client IP,
+  so rotating source addresses cannot mint fresh buckets. Unpaid requests
+  remain per-IP.
+- **Payout hardening:** payout automation validates `payoutWalletAddress` with
+  `StrKey.isValidEd25519PublicKey`, re-checks provider approval/active state at
+  proposal time, and refuses to pay when the destination changed. The
+  threshold-1 auto-approve now derives the signer address from the signing key
+  and records the real approver.
+
+### Fixed
+
+- **SSE payment receipts are now reliable:** the upstream `data: [DONE]`
+  sentinel is withheld and re-emitted _after_ the trailing `x402_receipt`
+  event, so clients that stop at `[DONE]` still receive the receipt; the SDK
+  drains past `[DONE]` and exposes the final receipt via lazy getters.
+- **SQL time-series analytics:** window starts are aligned to the interval
+  grid, so aggregated rows are no longer silently dropped for the (usual)
+  unaligned wall-clock time.
+- **Escrow draws:** each draw now carries a unique `escrow:<quoteId>`
+  synthetic hash, so a second escrow request no longer collides with the unique
+  `Payment.txHash` index and per-token settlement actually runs.
+- **Circuit breaker:** an unexpected (non-`open:<n>`) Redis reply no longer
+  fast-fails every request against a healthy upstream.
+- **Dashboard `cn()`:** now actually merges classes via `twMerge(clsx(...))`
+  instead of a naive `join(' ')`, so conflicting Tailwind utilities resolve as
+  the call sites (and tests) intend.
+- **Dashboard test target:** wired `nx test dashboard` (and added the
+  `jest-environment-jsdom` the config already required) — the existing spec
+  files were previously never executed in CI.
+
+### Added
+
+- **Persisted in-app notifications:** `POST/GET /api/v1/notifications` backed
+  by a Postgres `Notification` row (with `read`/`readAt` state), plus a
+  dashboard `/notifications` feed with read controls. Migration
+  `20260912000000_notification_read_state`.
+
+### Tests
+
+- New coverage for wallet-keyed rate limiting, payout validation/approval,
+  escrow hash uniqueness, notification persistence, analytics bucket
+  alignment, SSE receipt ordering, and the `minPaymentAmount` floor.
+
+---
+
 ## [0.2.0] — 2026-09-08
 
 ### Security

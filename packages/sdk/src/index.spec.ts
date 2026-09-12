@@ -625,6 +625,72 @@ describe('X402Client', () => {
         expect(chunks).toHaveLength(1);
       }
     });
+
+    it('captures a receipt delivered after [DONE] and exposes it via the lazy getter', async () => {
+      // Regression: the generator used to `return` at [DONE], so a receipt
+      // appended after the sentinel was dropped entirely. It must keep
+      // draining, never yield the receipt as a content chunk, and surface the
+      // FINAL receipt (actual cost), not the pre-flight header estimate.
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"id":"1","choices":[{"delta":{"content":"Hi"}}]}\n\n'),
+          );
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.enqueue(
+            encoder.encode(
+              'data: {"x402_receipt":{"amount":"1234","asset":"USDC","actualCost":"1234","tokensUsed":42}}\n\n',
+            ),
+          );
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name: string) =>
+            name === 'X-Payment-Receipt' ? '{"amount":"1000000","asset":"USDC"}' : null,
+          forEach: jest.fn(),
+        },
+        body: stream,
+        json: async () => {
+          throw new Error('Not JSON');
+        },
+        text: async () => '',
+        bodyUsed: false,
+        redirected: false,
+        statusText: 'OK',
+        type: 'basic',
+        url: '',
+        clone: function () {
+          return this;
+        },
+        blob: async () => new Blob([]),
+        arrayBuffer: async () => new ArrayBuffer(0),
+        formData: async () => new FormData(),
+      } as unknown as Response);
+
+      const client = new X402Client(defaultConfig);
+      const result = await client.callStream(chatRequest);
+
+      expect(result.success).toBe(true);
+      const chunks: unknown[] = [];
+      if (result.success) {
+        for await (const chunk of result.stream!) {
+          chunks.push(chunk);
+        }
+      }
+
+      // Only the content chunk is yielded — the receipt event is not content.
+      expect(chunks).toHaveLength(1);
+      // The getter resolves to the streamed receipt (actual cost), not the
+      // header deposit estimate.
+      expect(result.receipt?.amount).toBe('1234');
+      expect(result.cost?.amount).toBe('1234');
+    });
   });
 
   describe('checkPaymentStatus()', () => {

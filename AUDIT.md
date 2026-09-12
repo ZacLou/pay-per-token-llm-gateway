@@ -258,4 +258,34 @@ in this session; the remaining items are honest, tracked residuals —
 tracks**, and **executed gas benchmarks** (methodology + ledger provided;
 execution requires the Rust toolchain / CI).
 
-_Generated 2026-09-08 by automated audit + hardening pass._
+---
+
+## 8. Addendum — 2026-09-12 hardening pass
+
+Second full source review. The repo was green at the start (182 unit tests)
+but had the following **genuine** defects, all now fixed and regression-tested.
+
+| #   | Defect                                                                                                                                                                                            | Fix                                                                                                                                 | Test                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| H1  | `TRUST_PROXY` defaulted to `1`, so a directly-exposed gateway honoured forged `X-Forwarded-For` and IP rate limiting was bypassable                                                               | Proxy trust is now **disabled unless explicitly set**; production logs a prominent warning when unset                               | `config` parse/load suite (5 cases)                        |
+| H2  | Paid rate tier was keyed by client IP only                                                                                                                                                        | Paid tier keyed by the **server-verified payer wallet** from the confirmed payment row; headers never used for the key              | `rate-limit.guard` (9 cases incl. IP rotation)             |
+| H3  | Streaming receipts were emitted **after** the upstream `[DONE]`, so clients that stop at `[DONE]` never saw them; the SDK also `return`ed at `[DONE]`                                             | Proxy withholds `[DONE]` and re-emits it after the receipt; SDK drains past `[DONE]` and exposes the final receipt via lazy getters | proxy stream ordering test + SDK receipt test              |
+| H4  | SQL time-series buckets were dropped whenever wall-clock time was unaligned to the interval (the normal case)                                                                                     | Window start snapped to the interval grid on both sides                                                                             | analytics unaligned-`now` + sub-hour tests                 |
+| H5  | Every escrow draw reused a synthetic `txHash` of `''`, colliding with the unique `Payment.txHash` index → escrow settlement only worked once, and the `escrow:` charge branch never ran           | Unique `escrow:<quoteId>` synthetic hash per draw                                                                                   | new `x402.service` suite (4 cases)                         |
+| H6  | Payout automation paid providers without validating the destination or re-checking approval, and recorded the destination as an approver; threshold-1 auto-approve passed an empty signer address | `StrKey` validation, active/approval re-check at proposal time, real signer address recorded, signer derived from the signing key   | new `payouts.service` suite (11 cases)                     |
+| H7  | An unexpected numeric Redis reply was misread as `open:1`, fast-failing every request (this was failing the e2e suite)                                                                            | Only a well-formed `open:<n>` reply may reject; anything else fails open like the Redis-error path                                  | circuit-breaker Redis test                                 |
+| H8  | In-app notifications lived only in an in-memory queue (the `Notification` table was unused)                                                                                                       | Persisted in Postgres with `read`/`readAt`, exposed via `/api/v1/notifications` + dashboard feed                                    | notifications service suite (11 cases) + dashboard api lib |     | H9  | Gateway e2e suite was **red** (payment forwarding returned 502) | Root-caused to H7; suite is green | 39/39 e2e |
+| H10 | Dashboard had `jest.config.ts` + 3 spec files but **no `test` target**, so 23 tests never ran in CI (the closed #32 issue was unverifiable)                                                       | Added the `test` target (and the missing `jest-environment-jsdom` dev dependency the config already required)                       | 23 dashboard tests now run in `nx test --all`              |
+| H11 | Once the dashboard suite actually ran, `cn()` was a naive `join(' ')` that never performed the Tailwind conflict resolution its test (and its `clsx`/`tailwind-merge` deps) expected              | Implemented `cn` as `twMerge(clsx(inputs))`                                                                                         | `utils.spec` conflict-resolution case now passes           |
+
+**Verified at this pass:** unit **423 tests / 27 suites across 8 projects**
+(gateway 214, x402-core 67, config 36, wallet 30, validation 25, dashboard 23,
+sdk 20, notifications 8), e2e **39 tests / 2 suites**, lint **0 errors** (15
+pre-existing warnings), `tsc` + `next build` green, `pnpm audit` **0 critical**.
+**Not verifiable in this environment:** Rust `cargo test`/benches (no Rust
+toolchain installed) — CI runs them. Independent contract audit and the
+dev-tooling advisories remain open tracked residuals.
+
+_Addendum generated 2026-09-12._
+
+_Original report generated 2026-09-08 by automated audit + hardening pass._

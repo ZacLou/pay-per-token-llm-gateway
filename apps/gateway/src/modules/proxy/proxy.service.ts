@@ -160,7 +160,20 @@ class CircuitBreaker {
         return;
       }
 
-      const retryIn = resultStr.replace('open:', '');
+      // Only a well-formed `open:<retryAfter>` reply may reject a request. An
+      // unexpected value (e.g. a Redis proxy or test double returning a bare
+      // numeric reply) must NOT be misread as "open" — that would fast-fail
+      // every request against a healthy upstream. Fail open exactly as the
+      // Redis-error path below does.
+      if (!resultStr.startsWith('open')) {
+        logger.warn('Circuit breaker returned an unexpected value, allowing request', {
+          hostname,
+          result: resultStr.slice(0, 32),
+        });
+        return;
+      }
+
+      const retryIn = resultStr.slice('open:'.length);
       throw new Error(`Circuit breaker open for ${hostname}. Retry in ${retryIn}s.`);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('Circuit breaker open')) {
@@ -453,6 +466,13 @@ export class ProxyService {
     const reader = upstreamResponse.body.getReader();
     let totalTokens: number | undefined;
     let aborted = false;
+    // Set when the upstream sends its `data: [DONE]` sentinel. The sentinel is
+    // WITHHELD and re-emitted only after `onDone` has written the trailing
+    // x402 receipt, so the receipt is guaranteed to precede [DONE]. Forwarding
+    // the upstream sentinel immediately would let standard SSE clients stop
+    // at the first [DONE] and never see the receipt — the payment-receipt
+    // handling bug this ordering fixes.
+    let upstreamDone = false;
 
     // Handle client disconnection → abort upstream fetch + reader
     const onClientClose = () => {
@@ -480,6 +500,38 @@ export class ProxyService {
       }
     }, streamTimeout);
 
+    // Write to the client, honoring backpressure. Without this, a slow
+    // consumer would make the gateway buffer the entire upstream stream in
+    // memory. Node's `res.write` returns false exactly when the socket buffer
+    // is full — wait for 'drain' (or the client closing) before reading more.
+    // A non-boolean result (e.g. a mock) means the write was accepted.
+    const writeChunk = async (chunk: string | Uint8Array): Promise<void> => {
+      if (res.writableEnded) return;
+      if (res.write(chunk) === false) {
+        await new Promise<void>((resolve) => {
+          const cleanup = () => {
+            res.removeListener('drain', onDrain);
+            res.removeListener('close', onClose);
+          };
+          const onDrain = () => {
+            cleanup();
+            resolve();
+          };
+          const onClose = () => {
+            cleanup();
+            resolve();
+          };
+          if (typeof res.once === 'function') {
+            res.once('drain', onDrain);
+            res.once('close', onClose);
+          } else {
+            // Minimal emitter (test doubles): don't block the stream.
+            setImmediate(onDrain);
+          }
+        });
+      }
+    };
+
     try {
       const decoder = new TextDecoder();
       let lineBuffer = '';
@@ -488,57 +540,45 @@ export class ProxyService {
         const { done, value } = await reader.read();
         if (done) break;
 
-        // Forward raw bytes to the client immediately, honoring backpressure.
-        // Without this, a slow consumer would make the gateway buffer the
-        // entire upstream stream in memory. Node's `res.write` returns false
-        // exactly when the socket buffer is full — wait for 'drain' (or the
-        // client closing) before reading more. A non-boolean result (e.g. a
-        // mock) means the write was accepted and we keep streaming.
-        if (res.write(value) === false) {
-          await new Promise<void>((resolve) => {
-            const cleanup = () => {
-              res.removeListener('drain', onDrain);
-              res.removeListener('close', onClose);
-            };
-            const onDrain = () => {
-              cleanup();
-              resolve();
-            };
-            const onClose = () => {
-              cleanup();
-              resolve();
-            };
-            if (typeof res.once === 'function') {
-              res.once('drain', onDrain);
-              res.once('close', onClose);
-            } else {
-              // Minimal emitter (test doubles): don't block the stream.
-              setImmediate(onDrain);
-            }
-          });
-        }
-
-        // Parse individual SSE lines to extract usage from the last valid chunk
+        // Frame the incoming bytes into complete SSE lines. Forwarding
+        // line-by-line (instead of raw chunks) is what lets us intercept the
+        // exact `data: [DONE]` line even when it shares a chunk with payload
+        // bytes or straddles a chunk boundary. Order is preserved, so the
+        // stream the client sees is byte-for-byte the upstream stream minus
+        // the withheld sentinel.
         lineBuffer += decoder.decode(value, { stream: true });
-        const lines = lineBuffer.split('\n');
-        // Keep the last potentially incomplete line in the buffer
-        lineBuffer = lines.pop() || '';
 
-        for (const line of lines) {
+        let newlineIdx: number;
+        while ((newlineIdx = lineBuffer.indexOf('\n')) !== -1) {
+          const line = lineBuffer.slice(0, newlineIdx + 1);
+          lineBuffer = lineBuffer.slice(newlineIdx + 1);
+
           const trimmed = line.trim();
-          if (!trimmed.startsWith('data: ') || trimmed === 'data: [DONE]') continue;
+          if (trimmed === 'data: [DONE]') {
+            upstreamDone = true;
+            continue; // withheld until the receipt has been written
+          }
 
-          try {
-            const jsonStr = trimmed.slice(6);
-            const parsed = JSON.parse(jsonStr);
-            // Capture usage from any chunk that has it (typically the last)
-            if (parsed.usage?.total_tokens != null) {
-              totalTokens = parsed.usage.total_tokens;
+          await writeChunk(line);
+
+          // Parse the line to extract usage from the final data chunk.
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6));
+              if (parsed.usage?.total_tokens != null) {
+                totalTokens = parsed.usage.total_tokens;
+              }
+            } catch {
+              /* skip unparseable lines */
             }
-          } catch {
-            /* skip unparseable lines */
           }
         }
+      }
+
+      // Flush any trailing partial line (a stream that ended without a final
+      // newline) so no upstream data is lost.
+      if (lineBuffer && lineBuffer.trim() !== 'data: [DONE]') {
+        await writeChunk(lineBuffer);
       }
     } catch (err) {
       if (!aborted) {
@@ -565,6 +605,12 @@ export class ProxyService {
       // still writable. Must be awaited — otherwise the async writes
       // in the callback would race with res.end() below.
       await onDone?.(totalTokens);
+
+      // Re-emit the withheld sentinel LAST, after the receipt. Exactly one
+      // [DONE] reaches the client, and it always comes after any receipt.
+      if (upstreamDone && !res.writableEnded) {
+        await writeChunk('data: [DONE]\n\n');
+      }
 
       if (!res.writableEnded) {
         res.end();

@@ -287,19 +287,19 @@ healthchecks every service. A full reference lives in `.env.mainnet.example`.
 Create a Railway project with PostgreSQL and Redis (same layout as Part 1),
 then set the gateway service variables:
 
-| Variable                                                                     | Mainnet value                                              |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `NODE_ENV`                                                                   | `production`                                               |
-| `STELLAR_NETWORK`                                                            | `mainnet`                                                  |
-| `USDC_ISSUER`                                                                | `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` |
-| `HORIZON_URL`                                                                | `https://horizon.stellar.org`                              |
-| `SOROBAN_RPC_URL`                                                            | `https://soroban-mainnet.stellar.org`                      |
-| `DATABASE_URL`                                                               | Railway Postgres URL                                       |
-| `REDIS_URL`                                                                  | Railway Redis URL                                          |
-| `JWT_SECRET`                                                                 | random 256-bit value                                       |
-| `CONTRACT_ADMIN_SECRET`                                                      | mainnet admin secret key                                   |
-| `PAYMENT_VERIFIER_CONTRACT` / `CREDIT_ESCROW_CONTRACT` / `MULTISIG_CONTRACT` | deployed mainnet IDs                                       |
-| `TRUST_PROXY`                                                                | `1` (Railway) — adjust if you add Cloudflare               |
+| Variable                                                                     | Mainnet value                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                                   | `production`                                                                                      |
+| `STELLAR_NETWORK`                                                            | `mainnet`                                                                                         |
+| `USDC_ISSUER`                                                                | `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`                                        |
+| `HORIZON_URL`                                                                | `https://horizon.stellar.org`                                                                     |
+| `SOROBAN_RPC_URL`                                                            | `https://soroban-mainnet.stellar.org`                                                             |
+| `DATABASE_URL`                                                               | Railway Postgres URL                                                                              |
+| `REDIS_URL`                                                                  | Railway Redis URL                                                                                 |
+| `JWT_SECRET`                                                                 | random 256-bit value                                                                              |
+| `CONTRACT_ADMIN_SECRET`                                                      | mainnet admin secret key                                                                          |
+| `PAYMENT_VERIFIER_CONTRACT` / `CREDIT_ESCROW_CONTRACT` / `MULTISIG_CONTRACT` | deployed mainnet IDs                                                                              |
+| `TRUST_PROXY`                                                                | `1` when behind your proxy chain (Railway/Cloudflare); leave unset for a directly-exposed gateway |
 
 ### 5.5 Security considerations
 
@@ -309,8 +309,11 @@ then set the gateway service variables:
 - **Secret management**: never put `CONTRACT_ADMIN_SECRET` or `JWT_SECRET`
   in git. Use Railway's encrypted variables, a secret manager, or a
   hardware-backed signer.
-- **Rate limiting**: wallet-based and IP-based limits apply; set
-  `TRUST_PROXY` correctly so the real client IP is seen.
+- **Rate limiting**: unpaid requests are limited per IP and confirmed
+  payments are limited per verified payer wallet. `TRUST_PROXY` is disabled
+  by default (forwarding headers ignored) — set it explicitly only when the
+  gateway is behind a trusted proxy, or forged `X-Forwarded-For` would widen
+  the IP tier.
 - **Contract admin**: keep the admin account's signing key offline when
   possible; use the multisig contract for higher-value operations.
 - **Audit trail**: on-chain payment records are permanent. Test refunds on

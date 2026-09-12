@@ -256,6 +256,73 @@ describe('ProxyService', () => {
         global.fetch = originalFetch;
       }
     });
+
+    it('re-emits the terminal [DONE] only AFTER the trailing receipt is written', async () => {
+      // Regression: the upstream `data: [DONE]` used to be forwarded verbatim,
+      // so a client that stops reading at [DONE] never saw the x402 receipt.
+      // The sentinel must be withheld and re-emitted after `onDone` writes the
+      // receipt, guaranteeing exactly one [DONE] at the very end.
+      const writes: string[] = [];
+      let receiptWrittenAt = -1;
+      const mockRes = {
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: (chunk: unknown) => {
+          writes.push(String(chunk));
+          return true;
+        },
+        end: jest.fn(),
+        on: jest.fn(),
+        removeListener: jest.fn(),
+        get writableEnded() {
+          return false;
+        },
+      } as unknown as Response;
+
+      const readableStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n` +
+                `data: {"choices":[],"usage":{"total_tokens":7}}\n\n` +
+                `data: [DONE]\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      });
+
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, body: readableStream });
+
+      try {
+        await service.forwardStreamRequest(
+          { model: 'gpt-4', messages: [{ role: 'user', content: 'Hi' }], stream: true },
+          'https://api.example.com/v1/chat/completions',
+          mockRes,
+          undefined,
+          undefined,
+          undefined,
+          () => {
+            // Simulates the controller writing the trailing receipt event.
+            receiptWrittenAt = writes.length;
+            writes.push('data: {"x402_receipt":{"id":"r1"}}\n\n');
+          },
+        );
+
+        const doneLines = writes.filter((w) => w.includes('[DONE]'));
+        // Exactly one DONE reaches the client...
+        expect(doneLines).toHaveLength(1);
+        // ...and it is the final write, after the receipt.
+        expect(writes[writes.length - 1]).toContain('[DONE]');
+        expect(receiptWrittenAt).toBeGreaterThanOrEqual(0);
+        expect(writes.indexOf('data: {"x402_receipt":{"id":"r1"}}\n\n')).toBeLessThan(
+          writes.length - 1,
+        );
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
   });
 
   describe('forwardRequest', () => {
@@ -441,6 +508,32 @@ describe('ProxyService', () => {
           // Success closed the circuit — the next call is not blocked
           const second = await service.forwardRequest(request, upstreamUrl);
           expect(second.response).toEqual(responseBody);
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
+
+      it('does not treat an unexpected numeric Redis reply as an open circuit', async () => {
+        // A Redis proxy / test double that returns a bare number used to be
+        // misread as "open:1". Only a well-formed `open:<n>` reply may
+        // fast-fail; anything else fails open, like the Redis-error path.
+        const module = await Test.createTestingModule({
+          providers: [
+            ProxyService,
+            {
+              provide: 'REDIS',
+              useValue: { eval: jest.fn().mockResolvedValue(1), del: jest.fn() },
+            },
+            MetricsService,
+          ],
+        }).compile();
+        const redisService = module.get<ProxyService>(ProxyService);
+
+        const originalFetch = global.fetch;
+        global.fetch = mockOkFetch();
+        try {
+          const { response } = await redisService.forwardRequest(request, upstreamUrl);
+          expect(response).toEqual(responseBody);
         } finally {
           global.fetch = originalFetch;
         }

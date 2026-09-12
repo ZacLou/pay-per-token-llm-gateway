@@ -120,9 +120,11 @@
 1. **Contracts are self-tested, not externally audited.** No third-party audit
    has reviewed the three Soroban contracts. This is the #1 mainnet gate
    (`MAINNET_READINESS.md` §1).
-2. **Rate limiting is IP-only.** Behind a trusted proxy this is sound; a
-   directly-exposed gateway without `TRUST_PROXY=0` can be bypassed by
-   spoofing `X-Forwarded-For`.
+2. **Unpaid rate limiting is IP-based.** The paid tier is keyed by the
+   verified payer wallet, but unpaid 402 spam is still limited per client IP.
+   `TRUST_PROXY` is off by default so a directly-exposed gateway ignores
+   `X-Forwarded-For`; set it explicitly only when a trusted reverse proxy is
+   actually in front.
 3. **Quote front-running is griefing-only** (P8): a third party can pay
    someone's quote first, costing the attacker real funds; the victim
    re-quotes. Memo enforcement is deliberately off.
@@ -148,7 +150,8 @@
 - The gateway operator runs TLS-terminating infrastructure (Cloudflare/NGINX
   recommended) and does not expose the gateway directly on the public
   internet without a proxy.
-- `TRUST_PROXY` is set correctly for the deployment topology.
+- `TRUST_PROXY` is set correctly for the deployment topology (the secure
+  default is _unset_/disabled, which ignores all forwarding headers).
 - Horizon/Soroban RPC endpoints are operated by SDF or a reputable provider;
   the gateway fails **closed** when they error (valid payments are never
   falsely accepted).

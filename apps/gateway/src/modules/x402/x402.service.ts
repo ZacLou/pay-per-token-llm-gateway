@@ -239,7 +239,13 @@ export class X402Service {
 
     return {
       verified: true,
-      txHash: '',
+      // Synthetic, unique per escrow draw. Using an empty string here would
+      // collide with the `Payment.txHash` unique constraint on the SECOND
+      // escrow request (Postgres treats '' as a value, unlike NULL), so every
+      // draw after the first would fail the claim with a 402. Prefixing with
+      // `escrow:` keeps the constaint satisfied and lets the settlement path
+      // recognise escrow draws (`txHash.startsWith('escrow:')`).
+      txHash: `escrow:${quote.id}`,
       payerAddress: userAddress,
       amount: quote.amount,
       asset: quote.asset,

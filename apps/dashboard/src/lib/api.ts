@@ -291,10 +291,60 @@ export function fetchAuditLogs(params?: {
   if (params?.entity) qs.set('entity', params.entity);
   const query = qs.toString();
   return request<PaginatedAuditLogs>(`/admin/audit${query ? `?${query}` : ''}`);
+} // ── Notifications ────────────────────────────
+
+export interface InAppNotification {
+  id: string;
+  providerId: string;
+  event: string;
+  payload: Record<string, unknown>;
+  read: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedNotifications {
+  data: InAppNotification[];
+  total: number;
+  unread: number;
+  limit: number;
+  offset: number;
+}
+
+/** Persisted in-app notifications for the authenticated wallet's providers. */
+export function fetchNotifications(params?: {
+  providerId?: string;
+  unreadOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedNotifications> {
+  const qs = new URLSearchParams();
+  if (params?.providerId) qs.set('providerId', params.providerId);
+  if (params?.unreadOnly) qs.set('unreadOnly', 'true');
+  if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.offset) qs.set('offset', String(params.offset));
+  const query = qs.toString();
+  return request<PaginatedNotifications>(`/notifications${query ? `?${query}` : ''}`);
+}
+
+export function fetchUnreadNotificationCount(): Promise<{ unread: number }> {
+  return request<{ unread: number }>('/notifications/unread-count');
+}
+
+export function markNotificationRead(id: string): Promise<InAppNotification> {
+  return request<InAppNotification>(`/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
+}
+
+export function markAllNotificationsRead(providerId?: string): Promise<{ updated: number }> {
+  return request<{ updated: number }>('/notifications/read-all', {
+    method: 'POST',
+    body: JSON.stringify(providerId ? { providerId } : {}),
+  });
 }
 
 // ── Webhooks ─────────────────────────────────
-
 export function sendWebhookTest(webhookUrl: string): Promise<{ success: boolean }> {
   return request<{ success: boolean }>('/webhooks/test', {
     method: 'POST',

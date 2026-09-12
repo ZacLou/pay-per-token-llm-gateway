@@ -55,13 +55,29 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Trust the first proxy hop (Cloudflare/NGINX/Railway) so `request.ip`
-  // reflects the real client IP — required for IP-based rate limiting.
-  // Configure via TRUST_PROXY (e.g. "1", "loopback", or a comma-separated
-  // list of proxy IPs). See https://expressjs.com/en/guide/behind-proxies.html
+  // Explicit proxy trust. `request.ip` (used by IP-based rate limiting) is
+  // taken from the socket unless a proxy is explicitly trusted. Trusting
+  // proxy headers while directly exposed lets a client forge X-Forwarded-For
+  // and rotate source IPs at will, so the safe default is `false` (ignore
+  // forwarded headers) and trusting a proxy requires setting TRUST_PROXY
+  // (e.g. "1" for a single hop, "loopback", or a proxy IP list).
+  // See https://expressjs.com/en/guide/behind-proxies.html
   const trustProxy = config.security.trustProxy;
   const httpServer = app.getHttpAdapter().getInstance() as Express;
-  httpServer.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+  httpServer.set('trust proxy', trustProxy);
+  if (trustProxy === false) {
+    const message =
+      'TRUST_PROXY is disabled: X-Forwarded-For/X-Real-IP are ignored and ' +
+      'request.ip comes from the socket. Set TRUST_PROXY only when the ' +
+      'gateway runs behind a trusted reverse proxy.';
+    if (config.nodeEnv === 'production') {
+      logger.warn(message);
+    } else {
+      logger.info(message);
+    }
+  } else {
+    logger.info(`trust proxy enabled: ${String(trustProxy)}`);
+  }
 
   // Hard upper bounds on the HTTP server itself: a client that never finishes
   // sending its request (or its headers) must not hold a connection open

@@ -137,10 +137,16 @@ export async function proposeMultisig(options: MultisigProposeOptions): Promise<
  * call, so `executed` reflects the post-call state.
  */
 export async function approveMultisig(options: MultisigApproveOptions): Promise<MultisigResult> {
-  const { contractId, rpcUrl, networkPassphrase, signerSecret, signer, proposalId } = options;
+  const { contractId, rpcUrl, networkPassphrase, signerSecret, proposalId } = options;
 
   try {
     const signerKeypair = Keypair.fromSecret(signerSecret);
+
+    // Derive the signer's public address from the signing key when the caller
+    // did not supply one. Passing an empty address to the contract would make
+    // the approval fail (or, worse, authorize the wrong account), so the
+    // address must always match the key that signs the auth entry.
+    const signer = options.signer || signerKeypair.publicKey();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { contract } = await import('@stellar/stellar-sdk');

@@ -107,24 +107,35 @@ export class X402Client {
     }
 
     if (firstResponse.ok) {
-      const headerReceipt = this.parseReceiptHeader(firstResponse.headers.get('X-Payment-Receipt'));
-      const receiptRef: { receipt: PaymentReceipt | undefined } = { receipt: headerReceipt };
-      return {
-        success: true,
-        stream: this.sseGenerator(firstResponse, receiptRef),
-        receipt: receiptRef.receipt ?? headerReceipt,
-        cost:
-          (receiptRef.receipt ?? headerReceipt)
-            ? {
-                amount: (receiptRef.receipt ?? headerReceipt)!.amount,
-                asset: (receiptRef.receipt ?? headerReceipt)!.asset as PaymentAsset,
-              }
-            : undefined,
-      };
+      return this.buildStreamResult(firstResponse);
     }
 
     const errorBody = await firstResponse.text();
     return { success: false, error: `Gateway error: ${firstResponse.status} ${errorBody}` };
+  }
+
+  /**
+   * Build an `X402StreamResult` whose `receipt`/`cost` are lazy getters over
+   * the shared receipt ref. The gateway's authoritative receipt (actual cost +
+   * tokens used) arrives as a trailing SSE event while the stream is being
+   * consumed, so evaluating the property at call time would freeze it to the
+   * pre-flight `X-Payment-Receipt` header (the deposit estimate). With getters,
+   * `result.receipt` reflects the final streamed receipt once iteration ends.
+   */
+  private buildStreamResult(response: globalThis.Response): X402StreamResult {
+    const headerReceipt = this.parseReceiptHeader(response.headers.get('X-Payment-Receipt'));
+    const receiptRef: { receipt: PaymentReceipt | undefined } = { receipt: undefined };
+    return {
+      success: true,
+      stream: this.sseGenerator(response, receiptRef),
+      get receipt() {
+        return receiptRef.receipt ?? headerReceipt;
+      },
+      get cost() {
+        const final = receiptRef.receipt ?? headerReceipt;
+        return final ? { amount: final.amount, asset: final.asset as PaymentAsset } : undefined;
+      },
+    } as X402StreamResult;
   }
 
   /** Check the payment status for a quote. */
@@ -192,20 +203,7 @@ export class X402Client {
     }
 
     if (isStream) {
-      const headerReceipt = this.parseReceiptHeader(response.headers.get('X-Payment-Receipt'));
-      const receiptRef: { receipt: PaymentReceipt | undefined } = { receipt: headerReceipt };
-      return {
-        success: true,
-        stream: this.sseGenerator(response, receiptRef),
-        receipt: receiptRef.receipt ?? headerReceipt,
-        cost:
-          (receiptRef.receipt ?? headerReceipt)
-            ? {
-                amount: (receiptRef.receipt ?? headerReceipt)!.amount,
-                asset: (receiptRef.receipt ?? headerReceipt)!.asset as PaymentAsset,
-              }
-            : undefined,
-      } as X402StreamResult;
+      return this.buildStreamResult(response);
     }
 
     const llmResponse = (await response.json()) as ChatCompletionResponse;
@@ -392,6 +390,13 @@ export class X402Client {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    // The gateway sends the x402 receipt as the LAST event before `[DONE]`.
+    // We must therefore NOT stop the moment `[DONE]` appears — returning
+    // early would silently drop the receipt for every streaming response.
+    // Instead, mark the sentinel and keep draining the remaining frames
+    // (reporting any `x402_receipt` we find) until the upstream closes.
+    let sawDone = false;
+
     try {
       while (true) {
         const { done, value } = await reader.read();
@@ -406,17 +411,22 @@ export class X402Client {
           if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
           const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
+          if (data === '[DONE]') {
+            sawDone = true;
+            continue;
+          }
 
           try {
             const parsed = JSON.parse(data);
-            // Extract trailing receipt sent by the gateway after the stream
+            // Extract the trailing receipt event sent by the gateway. It may
+            // be delivered before or after [DONE] (older gateways appended it
+            // after), so we parse it in both cases.
             if (parsed.x402_receipt && receiptRef) {
               receiptRef.receipt = parsed.x402_receipt as PaymentReceipt;
               continue;
             }
-            const chunk = parsed as ChatCompletionStreamChunk;
-            yield chunk;
+            if (sawDone) continue;
+            yield parsed as ChatCompletionStreamChunk;
           } catch {
             // Skip unparseable lines
           }

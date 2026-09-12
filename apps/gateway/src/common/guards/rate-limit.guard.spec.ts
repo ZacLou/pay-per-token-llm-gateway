@@ -13,6 +13,7 @@ describe('RateLimitGuard', () => {
   };
 
   const CALLER_HEADER = 'GA5ZSE6VKPVFLEXMWJQBGHE4FJHKQIFSJMLQ7H4VFQB4UHLEH5IOVK3F';
+  const VERIFIED_PAYER = 'GB4YJON6574K74SGHSKHPMBJDJPLBPYN4HPGGN2J5RFKMSNFSWLBYFRL';
   const CLIENT_IP = '203.0.113.7';
   const TX_HASH = 'a'.repeat(64);
 
@@ -75,12 +76,51 @@ describe('RateLimitGuard', () => {
     expect(key).not.toContain(CALLER_HEADER);
     expect(prismaMock.payment.findFirst).toHaveBeenCalledWith({
       where: { txHash: TX_HASH, status: 'confirmed' },
-      select: { id: true },
+      select: { id: true, payerAddress: true },
     });
   });
 
-  it('grants the paid tier only when the hash maps to a confirmed payment', async () => {
-    (prismaMock.payment.findFirst as jest.Mock).mockResolvedValue({ id: 'pay-1' });
+  it('keys the paid tier by the server-verified payer wallet, not the IP', async () => {
+    (prismaMock.payment.findFirst as jest.Mock).mockResolvedValue({
+      id: 'pay-1',
+      payerAddress: VERIFIED_PAYER,
+    });
+    const guard = makeGuard();
+
+    await guard.canActivate(makeContext({ 'x-payment-hash': TX_HASH }, CLIENT_IP));
+
+    const key = evalKey();
+    expect(key).toContain(':paid:');
+    // Wallet-keyed: rotating source IPs cannot create a fresh bucket.
+    expect(key).toContain(`wallet:${VERIFIED_PAYER}`);
+    expect(key).not.toContain(CLIENT_IP);
+    // The client-supplied header must never influence the key.
+    expect(key).not.toContain(CALLER_HEADER);
+  });
+
+  it('uses the same wallet bucket regardless of source IP (IP-rotation resistant)', async () => {
+    (prismaMock.payment.findFirst as jest.Mock).mockResolvedValue({
+      id: 'pay-1',
+      payerAddress: VERIFIED_PAYER,
+    });
+    const guard = makeGuard();
+
+    await guard.canActivate(makeContext({ 'x-payment-hash': TX_HASH }, '203.0.113.7'));
+    const firstKey = evalKey();
+
+    (redisMock.eval as jest.Mock).mockClear();
+    await guard.canActivate(makeContext({ 'x-payment-hash': TX_HASH }, '198.51.100.42'));
+    const secondKey = evalKey();
+
+    expect(firstKey).toBe(secondKey);
+    expect(firstKey).toContain(`wallet:${VERIFIED_PAYER}`);
+  });
+
+  it('falls back to the IP bucket for a confirmed payment with no recorded payer', async () => {
+    (prismaMock.payment.findFirst as jest.Mock).mockResolvedValue({
+      id: 'pay-1',
+      payerAddress: null,
+    });
     const guard = makeGuard();
 
     await guard.canActivate(makeContext({ 'x-payment-hash': TX_HASH }, CLIENT_IP));
@@ -88,6 +128,15 @@ describe('RateLimitGuard', () => {
     const key = evalKey();
     expect(key).toContain(':paid:');
     expect(key).toContain(CLIENT_IP);
+  });
+
+  it('rejects a non-64-hex payment hash without querying the database', async () => {
+    const guard = makeGuard();
+
+    await guard.canActivate(makeContext({ 'x-payment-hash': 'not-a-hash' }, CLIENT_IP));
+
+    expect(prismaMock.payment.findFirst).not.toHaveBeenCalled();
+    expect(evalKey()).toContain(':unpaid:');
   });
 
   it('throws a 429 when the rate limit is exceeded', async () => {

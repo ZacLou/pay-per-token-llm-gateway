@@ -4,6 +4,7 @@ import { isIP } from 'net';
 import { lookup } from 'dns/promises';
 import { dispatcher, WebhookNotificationHandler } from '@x402/notifications';
 import { prisma } from '@x402/database';
+import { persistInAppNotification } from '../notifications/notifications.service';
 import { logger } from '@x402/logger';
 import type { NotificationEvent } from '@x402/types';
 
@@ -138,9 +139,19 @@ export class WebhooksService {
   async notify(providerId: string, event: NotificationEvent, data: Record<string, unknown>) {
     const channels: string[] = [];
 
+    // Persist the in-app notification in PostgreSQL so the dashboard feed
+    // survives restarts and is shared across gateway instances. The package
+    // dispatcher's in-app handler only keeps an in-memory queue, so this is
+    // the durable path. Best-effort — never blocks or fails the caller.
+    if (await persistInAppNotification(providerId, event, data)) {
+      channels.push('in_app');
+    }
+
     try {
       const delivered = await dispatcher.dispatch({ providerId, event, data });
-      channels.push(...delivered);
+      for (const channel of delivered) {
+        if (!channels.includes(channel)) channels.push(channel);
+      }
     } catch (error) {
       logger.error('Notification dispatch failed', { providerId, event, error: String(error) });
     }

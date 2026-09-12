@@ -8,27 +8,28 @@
     "start": "next start"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.32.0",
+    "@x402/authentication": "workspace:*",
     "@x402/types": "workspace:*",
     "@x402/ui": "workspace:*",
     "@x402/wallet": "workspace:*",
-    "@x402/authentication": "workspace:*",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.577.0",
     "next": "^15.5.21",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.4",
-    "lucide-react": "^0.577.0",
-    "date-fns": "^3.6.0",
-    "@tanstack/react-query": "^5.32.0",
-    "zustand": "^4.5.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.3.0"
+    "tailwind-merge": "^2.3.0",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "tailwindcss": "^3.4.0",
     "autoprefixer": "^10.4.0",
+    "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
     "typescript": "^5.4.0"
   }
 }

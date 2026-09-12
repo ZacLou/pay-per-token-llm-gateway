@@ -61,11 +61,17 @@ Redis with AOF persistence so restart windows are minimized.
 
 ### Rate Limiting
 
-Unpaid 402 requests are rate-limited by caller IP (sliding window, Redis
-Lua). Requests carrying a **confirmed** payment hash get a higher tier — the
-mere presence of a header never raises the limit. Behind a trusted proxy,
-`TRUST_PROXY` resolves the real client IP; a directly-exposed gateway must
-set `TRUST_PROXY=0` (spoofing `X-Forwarded-For` is otherwise possible).
+Unpaid 402 requests are rate-limited by caller IP (sliding window, Redis Lua).
+Requests carrying a **confirmed** payment hash get a higher tier keyed by the
+**server-verified payer wallet** (the `payerAddress` Horizon recorded on the
+confirmed payment row) — the mere presence of a header never raises the limit,
+and a caller cannot mint fresh buckets by rotating source IPs. Header-supplied
+identities (`x-caller-address`, `x-escrow-user`) are never used for the key.
+
+Proxy trust is **off by default**: `TRUST_PROXY` must be set explicitly (e.g.
+`1` or `loopback`) when the gateway really runs behind a trusted reverse proxy.
+A directly-exposed gateway therefore ignores `X-Forwarded-For` entirely, and a
+production start with it unset logs a prominent warning.
 
 ### Key Management
 
@@ -118,10 +124,11 @@ mainnet go/no-go path or consciously deferred — see
    credit-escrow, and multisig are self-tested only (23 / 43 / 32 unit tests,
    no external review). An independent audit is required before handling real
    USDC on mainnet.
-2. **Rate limiting is per IP only.** Wallet-address-based limiting is not
-   implemented. Callers behind a shared NAT can rotate through addresses to
-   evade it; single-use payment enforcement (atomic DB claim + Redis +
-   on-chain replay guards) is the stronger backstop.
+2. **Per-IP rate limiting for unpaid requests.** The paid tier is now keyed by
+   the verified payer wallet, but the unpaid 402 tier is still keyed by client IP
+   — callers behind a shared NAT or rotating addresses can spread unpaid quote
+   spam across many IPs. Single-use payment enforcement (atomic DB claim + Redis +
+   on-chain replay guards) remains the stronger backstop.
 3. **Dev/build-tooling advisories remain** (2 high, both `image-size` — no
    patched release exists; via the unused `@nx/vite`→less chain). Build-time
    only, never shipped to runtime, with no runtime-reachable path. Tracked in

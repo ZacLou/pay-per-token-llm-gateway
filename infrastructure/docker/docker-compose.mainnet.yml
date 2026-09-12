@@ -23,8 +23,9 @@
 #   STELLAR_NETWORK     (default: mainnet)
 #   USDC_ISSUER         (default: Circle mainnet USDC issuer GA5ZSE...KZVN)
 #   CORS_ORIGINS        (default: https://x402-dashboard.vercel.app)
-#   TRUST_PROXY         (default: 1; set to the actual proxy chain when
-#                       running behind Cloudflare/NGINX/Railway)
+#   TRUST_PROXY         (default: off; set explicitly to the actual proxy
+#                       chain e.g. 1/loopback when running behind
+#                       Cloudflare/NGINX/Railway)
 #
 # Contract deployment instructions:
 #   STELLAR_NETWORK=mainnet STELLAR_SECRET_KEY=S... \
@@ -82,7 +83,7 @@ services:
       CREDIT_ESCROW_CONTRACT: ${CREDIT_ESCROW_CONTRACT:?CREDIT_ESCROW_CONTRACT is required — mainnet contract ID}
       MULTISIG_CONTRACT: ${MULTISIG_CONTRACT:?MULTISIG_CONTRACT is required — mainnet contract ID}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://x402-dashboard.vercel.app}
-      TRUST_PROXY: ${TRUST_PROXY:-1}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
     depends_on:
       postgres:
         condition: service_healthy

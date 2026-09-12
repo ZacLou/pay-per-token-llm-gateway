@@ -225,8 +225,18 @@ export class AnalyticsService {
     }
 
     const now = new Date();
-    const startTime = new Date(now.getTime() - durationHours * 60 * 60 * 1000);
+    const intervalMs = intervalMinutes * 60 * 1000;
     const intervalSeconds = intervalMinutes * 60;
+
+    // Align the window start DOWN to an interval boundary. SQL buckets with
+    // `floor(epoch / interval) * interval`, so unaligned boundaries (e.g. a
+    // `now` of 12:34:56 with a 60-minute interval) produce bucket timestamps
+    // the zero-filled map does not contain — every row would be silently
+    // dropped. Aligning both sides to the same grid is what makes the SQL
+    // result actually land in the output buckets.
+    const windowStartMs =
+      Math.floor((now.getTime() - durationHours * 60 * 60 * 1000) / intervalMs) * intervalMs;
+    const startTime = new Date(windowStartMs);
 
     // One SQL query: aggregate time-series data using Postgres so the
     // database does the bucketing — no unbounded findMany into memory.
@@ -245,11 +255,10 @@ export class AnalyticsService {
       ORDER BY bucket_epoch
     `;
 
-    // Build zero-filled buckets
-    const intervalMs = intervalMinutes * 60 * 1000;
+    // Build zero-filled buckets on the same grid the SQL query groups by.
     const buckets: Map<number, TimeSeriesDataPoint> = new Map();
 
-    for (let t = startTime.getTime(); t <= now.getTime(); t += intervalMs) {
+    for (let t = windowStartMs; t <= now.getTime(); t += intervalMs) {
       buckets.set(t, {
         timestamp: new Date(t).toISOString(),
         paidRequests: 0,

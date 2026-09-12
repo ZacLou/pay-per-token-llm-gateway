@@ -660,7 +660,10 @@ export class ProxyController {
         );
 
         // Send cost/receipt as a trailing SSE event so the SDK can extract
-        // payment info from streaming responses (headers are already flushed).
+        // payment info from streaming responses (response headers were
+        // already flushed). The proxy service emits the terminal `[DONE]`
+        // AFTER this callback returns, so the receipt is always delivered
+        // before [DONE] and clients that stop at [DONE] still see it.
         if (payment) {
           const receipt = {
             id: payment.id,
@@ -675,7 +678,6 @@ export class ProxyController {
           };
           try {
             res.write(`data: ${JSON.stringify({ x402_receipt: receipt })}\n\n`);
-            res.write('data: [DONE]\n\n');
           } catch {
             /* client disconnected — stream already ended */
           }

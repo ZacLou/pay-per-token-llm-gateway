@@ -25,46 +25,63 @@ export class RateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const config = getConfig();
 
-    // Identify the caller by IP only. Client-supplied headers (e.g.
-    // x-caller-address) are never trusted — an attacker could rotate them to
-    // bypass the limit entirely. Behind a reverse proxy, `request.ip` is
-    // resolved via the Express `trust proxy` setting configured in main.ts.
-    const callerId = request.ip || request.socket.remoteAddress || 'unknown';
-
+    // Caller identity, in order of trust:
+    //   1. A server-VERIFIED wallet — the `payerAddress` recorded on a
+    //      confirmed payment row. The hash must already exist in our DB as
+    //      confirmed, so this address was derived by Horizon verification,
+    //      never from a client header.
+    //   2. The client IP, resolved through the Express `trust proxy` setting.
+    //
+    // Client-supplied headers (x-caller-address, x-escrow-user) are NEVER
+    // trusted for the rate-limit key — otherwise a caller could rotate them
+    // to mint a fresh bucket per request and bypass the limit entirely.
+    // Wallet-keyed throttling is what makes the paid tier resistant to IP
+    // rotation: one wallet = one bucket regardless of source address.
+    const ip = request.ip || request.socket.remoteAddress || 'unknown';
     const txHash = request.headers['x-payment-hash'] as string | undefined;
 
     // The paid tier is only granted when the payment hash has actually been
     // CONFIRMED — the mere presence of a (possibly fake) header must never
     // raise the limit, or the paid tier is trivially spoofable.
-    const isConfirmed = await this.isConfirmedPayment(txHash);
+    const confirmedPayment = await this.findConfirmedPayment(txHash);
 
-    if (isConfirmed) {
-      // Confirmed payments get a higher, separate rate limit
+    if (confirmedPayment) {
+      // Confirmed payments get a higher, separate rate limit. Prefer the
+      // verified payer wallet; fall back to IP when the row has no payer.
+      const callerId = confirmedPayment.payerAddress
+        ? `wallet:${confirmedPayment.payerAddress}`
+        : `ip:${ip}`;
       const paidWindow = config.redis.rateLimitWindow * 2; // e.g. 120s
       const paidMax = config.redis.rateLimitMax * 10; // e.g. 100 requests/window
       return this.checkLimit(callerId, paidWindow, paidMax, 'paid');
     }
 
-    // Unpaid requests: strict limit to prevent 402 quote-spam
+    // Unpaid requests: strict limit to prevent 402 quote-spam.
     const unpaidWindow = config.redis.rateLimitWindow;
     const unpaidMax = config.redis.rateLimitMax;
-    return this.checkLimit(callerId, unpaidWindow, unpaidMax, 'unpaid');
+    return this.checkLimit(`ip:${ip}`, unpaidWindow, unpaidMax, 'unpaid');
   }
 
-  /** True when the header carries a txHash with a confirmed payment row. */
-  private async isConfirmedPayment(txHash: string | undefined): Promise<boolean> {
-    if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) return false;
+  /**
+   * Return the confirmed payment row for `txHash` (with its verified payer
+   * address), or null when the header is absent, malformed, or maps to no
+   * confirmed payment.
+   */
+  private async findConfirmedPayment(
+    txHash: string | undefined,
+  ): Promise<{ id: string; payerAddress: string | null } | null> {
+    if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) return null;
     try {
       const payment = await this.prisma.payment.findFirst({
         where: { txHash, status: 'confirmed' },
-        select: { id: true },
+        select: { id: true, payerAddress: true },
       });
-      return !!payment;
+      return payment ?? null;
     } catch (error) {
       this.logger.warn('Rate limit payment check failed, using unpaid tier', {
         error: String(error),
       });
-      return false;
+      return null;
     }
   }
 
