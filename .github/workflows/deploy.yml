@@ -64,13 +64,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::warning title=Release images not pushed::DOCKER_USERNAME is not set — no images were pushed for $GITHUB_REF_NAME."
 
+      # Every step below repeats the same condition: Actions has no step-group
+      # `if:`, and a job-level `if:` cannot read `secrets`, so the gate has to be
+      # carried per step. Together they make the job a clean no-op when the
+      # credentials are absent.
+      #
+      # There is deliberately no Node setup here: both images are built inside
+      # their own Dockerfiles (FROM node:22-alpine), so the runner's Node version
+      # is irrelevant. An earlier `.nvmrc` step wrote an output nothing read.
       - uses: actions/checkout@v4
         if: env.HAS_DOCKER_CREDENTIALS == 'true'
-
-      - name: Read Node version from .nvmrc
-        if: env.HAS_DOCKER_CREDENTIALS == 'true'
-        id: nvm
-        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         if: env.HAS_DOCKER_CREDENTIALS == 'true'

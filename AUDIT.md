@@ -540,6 +540,10 @@ must not be mistaken for a normal green release.
 table. `.nvmrc` is `22`, so unlike the Dockerfiles there is no Node/pnpm mismatch
 on this path.
 
-**Noted, left alone:** the `docker` job's `Read Node version from .nvmrc` step is
-vestigial — its output is never consumed, since both images are built inside
-Docker rather than with the runner's Node. Left in place to keep the diff minimal.
+**Also tidied (F11):** the `docker` job carried a `Read Node version from .nvmrc`
+step whose output was never consumed anywhere. It is dead by construction — both
+images are built inside their own Dockerfiles (`FROM node:22-alpine`), so the
+runner's Node version cannot affect them. The only `steps.nvm.outputs.NODE_VERSION`
+consumer in the file is the `sbom` job, which has its own copy of the step. Removed,
+with a comment recording why no Node setup belongs in this job so it is not
+re-added.
