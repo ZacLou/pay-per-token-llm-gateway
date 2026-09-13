@@ -5,7 +5,12 @@
 import { loadConfig, validateEnv, getConfig, setConfig, parseTrustProxy } from './index';
 
 describe('config security hardening', () => {
-  const originalEnv = { ...process.env };
+  // `@x402/config` auto-loads the repo `.env` on import, so a developer's
+  // local `AUTH_DEV_MODE=true` becomes part of the "clean" baseline that
+  // afterEach restores — and every no-throw-in-production case below then
+  // fails locally while passing in CI (where no `.env` exists). Pin the
+  // security switches this suite asserts on so the baseline is deterministic.
+  const originalEnv = { ...process.env, AUTH_DEV_MODE: 'false' };
 
   afterEach(() => {
     process.env = { ...originalEnv };
