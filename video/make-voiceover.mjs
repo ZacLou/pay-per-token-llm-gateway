@@ -99,6 +99,30 @@ function wav(pcm, rate) {
 }
 
 /**
+ * Decode any ffmpeg-readable audio (mp3/wav/…) to 16-bit mono PCM.
+ * Used for providers whose raw-PCM output formats are plan-restricted:
+ * requesting mp3 and decoding locally keeps the request valid on every tier.
+ */
+function decodeToPcm(input, rate = 24000) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-i', 'pipe:0',
+      '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
+      'pipe:1',
+    ]);
+    const out = [];
+    ff.stdout.on('data', (d) => out.push(d));
+    ff.on('error', reject);
+    ff.on('close', (code) =>
+      code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(`ffmpeg decode exited ${code}`)),
+    );
+    ff.stdin.on('error', () => {});
+    ff.stdin.end(input);
+  });
+}
+
+/**
  * Some providers return a RIFF/WAV container even when raw PCM was requested.
  * Strip a WAV header when present so the assembled track stays raw PCM.
  */
@@ -141,7 +165,9 @@ function extractAudio(node, mimeHint = null) {
 // ── Providers ────────────────────────────────────────────────────────
 
 const DEFAULT_VOICES = {
-  elevenlabs: { voiceId: 'pNInz6obpgDQGcFmaJgB', modelId: 'eleven_multilingual_v2' },
+  // 'Rachel' — the default voice in ElevenLabs' own API examples, so it is
+  // present on every account/plan. Override under voice.providers.elevenlabs.
+  elevenlabs: { voiceId: '21m00Tcm4TlvDq8ikWAM', modelId: 'eleven_multilingual_v2' },
   openai: { voice: 'onyx', model: 'gpt-4o-mini-tts' },
   cartesia: { modelId: 'sonic-2', voiceId: null },
   gemini: { model: 'gemini-3.1-flash-tts-preview', voiceName: 'Kore' },
@@ -167,9 +193,12 @@ async function fetchWithRetry(url, init, label) {
 }
 
 async function synthElevenLabs(cfg, text, key, voice) {
+  // Request MP3 and decode locally: the raw-PCM output formats are
+  // plan-restricted on some accounts, while mp3_44100_128 is universally
+  // available. ffmpeg is already a hard dependency of this pipeline.
   const url =
     `https://api.elevenlabs.io/v1/text-to-speech/${cfg.voiceId}` +
-    `?output_format=pcm_24000&optimize_streaming_latency=0`;
+    `?output_format=mp3_44100_128&optimize_streaming_latency=0`;
   const res = await fetchWithRetry(
     url,
     {
@@ -192,7 +221,7 @@ async function synthElevenLabs(cfg, text, key, voice) {
     throw new Error(`ElevenLabs TTS failed (HTTP ${res.status}): ${(await res.text()).slice(0, 300)}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  return { pcm: stripWavHeader(buf), rate: 24000 };
+  return { pcm: await decodeToPcm(buf), rate: 24000 };
 }
 
 async function synthOpenAI(cfg, text, key, voice) {
