@@ -15,11 +15,15 @@
  *   node video/make-voiceover.mjs --check               # same, but exit 1 on overrun (CI)
  *   ELEVENLABS_API_KEY=... node video/make-voiceover.mjs
  *   node video/make-voiceover.mjs --provider openai     # force a provider
+ *   node video/make-voiceover.mjs --out docs/media/x402-gateway-demo.mp4
+ *                                                     # voice the featured cut in place
  *
- * Output: docs/media/x402-gateway-demo-voiced.mp4
+ * Output: docs/media/x402-gateway-demo-voiced.mp4 by default. `--out` may point
+ * at the input video to voice it in place; the mux is swapped in only once it
+ * succeeds, so a failed run leaves the original untouched.
  */
 
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -449,27 +453,40 @@ async function main() {
     return;
   }
 
-  await rm(OUT, { force: true });
-  await new Promise((resolve, reject) => {
-    const c = spawn(
-      'ffmpeg',
-      [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-i', VIDEO,
-        '-i', tmpWav,
-        '-c:v', 'copy',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-shortest',
-        '-movflags', '+faststart',
-        OUT,
-      ],
-      { stdio: ['ignore', 'inherit', 'inherit'] },
-    );
-    c.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`mux exited ${code}`))));
-  });
+  // Voicing the featured cut in place (`--out` == `--video`) is a supported
+  // workflow, and ffmpeg refuses to read and write the same path. Mux beside
+  // the target and swap the finished file in only once ffmpeg has succeeded, so
+  // a failed run leaves the original video intact rather than truncated.
+  const inPlace = VIDEO === OUT;
+  const muxTarget = inPlace ? `${OUT}.voicing-${process.pid}.mp4` : OUT;
+
+  await rm(muxTarget, { force: true });
+  try {
+    await new Promise((resolve, reject) => {
+      const c = spawn(
+        'ffmpeg',
+        [
+          '-hide_banner', '-loglevel', 'error', '-y',
+          '-i', VIDEO,
+          '-i', tmpWav,
+          '-c:v', 'copy',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          '-shortest',
+          '-movflags', '+faststart',
+          muxTarget,
+        ],
+        { stdio: ['ignore', 'inherit', 'inherit'] },
+      );
+      c.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`mux exited ${code}`))));
+    });
+  } catch (err) {
+    await rm(muxTarget, { force: true });
+    throw err;
+  }
+  if (inPlace) await rename(muxTarget, OUT);
   await rm(tmpWav, { force: true });
-  log(`\n  voiced video → ${path.relative(ROOT, OUT)}`);
+  log(`\n  voiced video → ${path.relative(ROOT, OUT)}${inPlace ? ' (voiced in place)' : ''}`);
 }
 
 main().catch((err) => {

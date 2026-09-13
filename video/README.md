@@ -1,7 +1,8 @@
 # Pitch video pipeline
 
 This directory produces the project's primary presentation video —
-`docs/media/x402-gateway-demo.mp4` — plus its thumbnail and caption track.
+`docs/media/x402-gateway-demo.mp4`, the voiced cut — plus its thumbnail and
+caption track.
 
 Nothing here is part of the product build. It is not an Nx project and adds no
 runtime dependency. Nothing large is generated at build time; the rendered
@@ -23,24 +24,25 @@ artifacts are committed under `docs/media/`.
                 ┌──────────────────────┐
                 │ make-voiceover.mjs   │  ElevenLabs / OpenAI / Cartesia / Gemini
                 └──────────────────────┘  → AAC track → mux
-                                        ──► docs/media/x402-gateway-demo-voiced.mp4
+                                        ──► docs/media/x402-gateway-demo.mp4  (voiced in place)
 ```
 
 ## Files
 
-| Path                 | Role                                                                      |
-| -------------------- | ------------------------------------------------------------------------- |
-| `narration.json`     | **Single source of truth**: scene order, durations, captions, TTS voice   |
-| `stage.html`         | 1920×1080 stage shell (fonts, background, caption track)                  |
-| `src/ui.js`          | DOM helpers, easing, syntax highlighting, component styles                |
-| `src/scenes.js`      | The ten scenes, each driven by scene-local time                           |
-| `src/main.js`        | Timeline driver: composites scenes, renders captions, exposes `render(t)` |
-| `capture.mjs`        | Captures real UI/chain/repo assets from the running stack                 |
-| `seed-demo.sql`      | Idempotent demo dataset for the dashboard screenshots                     |
-| `live-payment.mjs`   | Performs a real Stellar testnet payment and records the responses         |
-| `render.mjs`         | Frame capture → ffmpeg → MP4, thumbnail and SRT                           |
-| `make-voiceover.mjs` | Voiced narration (ElevenLabs/OpenAI/Cartesia/Gemini) + mux                |
-| `assets/`            | Captured screenshots and recorded JSON evidence                           |
+| Path                                  | Role                                                                                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `narration.json`                      | **Single source of truth**: scene order, durations, captions, TTS voice                                                            |
+| `stage.html`                          | 1920×1080 stage shell (fonts, background, caption track)                                                                           |
+| `src/ui.js`                           | DOM helpers, easing, syntax highlighting, component styles                                                                         |
+| `src/scenes.js`                       | The ten scenes, each driven by scene-local time                                                                                    |
+| `src/main.js`                         | Timeline driver: composites scenes, renders captions, exposes `render(t)`                                                          |
+| `capture.mjs`                         | Captures real UI/chain/repo assets from the running stack                                                                          |
+| `seed-demo.sql`                       | Idempotent demo dataset for the dashboard screenshots                                                                              |
+| `live-payment.mjs`                    | Performs a real Stellar testnet payment and records the responses                                                                  |
+| `render.mjs`                          | Frame capture → ffmpeg → MP4, thumbnail and SRT                                                                                    |
+| `make-voiceover.mjs`                  | Voiced narration (ElevenLabs/OpenAI/Cartesia/Gemini) + mux                                                                         |
+| `assets/`                             | Captured screenshots and recorded JSON evidence                                                                                    |
+| `assets/live/voiceover-manifest.json` | Narration provenance: provider, voice, and each scene's generated clip length against its budget (written by `make-voiceover.mjs`) |
 
 ## Prerequisites
 
@@ -81,29 +83,37 @@ node video/render.mjs
 
 ## Narrating it
 
-The video ships with burned-in captions and an `.srt`. To produce the voiced
-version, pick any supported TTS provider — all four return 24 kHz 16-bit mono,
-so the mux is identical:
+`render.mjs` writes a **silent** `docs/media/x402-gateway-demo.mp4`; the
+burned-in captions and the `.srt` are the narration's script. `make-voiceover.mjs`
+then synthesizes that script and muxes the track back onto the same file, so the
+featured cut is the voiced one. Pick any supported provider — all four return
+24 kHz 16-bit mono, so the mux is identical:
 
 ```bash
 # validate narration timing without any API call
 node video/make-voiceover.mjs --dry-run
 
 # ElevenLabs (default) — https://elevenlabs.io
-ELEVENLABS_API_KEY=... node video/make-voiceover.mjs
+ELEVENLABS_API_KEY=... node video/make-voiceover.mjs --out docs/media/x402-gateway-demo.mp4
 
 # or force another provider
-OPENAI_API_KEY=...     node video/make-voiceover.mjs --provider openai
-CARTESIA_API_KEY=...   node video/make-voiceover.mjs --provider cartesia
-GEMINI_API_KEY=...     node video/make-voiceover.mjs --provider gemini
-# → docs/media/x402-gateway-demo-voiced.mp4
+OPENAI_API_KEY=...   node video/make-voiceover.mjs --provider openai --out docs/media/x402-gateway-demo.mp4
+CARTESIA_API_KEY=... node video/make-voiceover.mjs --provider cartesia --out docs/media/x402-gateway-demo.mp4
+GEMINI_API_KEY=...   node video/make-voiceover.mjs --provider gemini --out docs/media/x402-gateway-demo.mp4
 ```
 
+`--out` defaults to `docs/media/x402-gateway-demo-voiced.mp4`, so drop the flag
+to keep the silent render alongside a separate voiced copy. Pointing `--out` at
+the input voices the featured file **in place**: the mux is written beside it and
+swapped in only after ffmpeg succeeds, so a failed run cannot truncate the video.
+
 The script measures every generated clip against its scene budget and reports
-any overrun instead of silently clipping narration. `narration.json` holds the
-provider, voice ids, style prompt and per-scene text, so re-recording is a
-config change. Voice ids/models default to a narration-friendly voice per
-provider and can be overridden under `voice.providers` in `narration.json`.
+any overrun instead of silently clipping narration, and records what it
+synthesized — provider, voice, and per-scene clip length vs budget — in
+`assets/live/voiceover-manifest.json`. `narration.json` holds the provider,
+voice ids, style prompt and per-scene text, so re-recording is a config change.
+Voice ids/models default to a narration-friendly voice per provider and can be
+overridden under `voice.providers` in `narration.json`.
 
 ## Provenance — what is real and what is demo data
 
@@ -114,6 +124,7 @@ provider and can be overridden under `voice.providers` in `narration.json`.
 | `live/live-payment.json`                       | a real Stellar **testnet** payment made by `live-payment.mjs` — including the successful paid retry (`HTTP 200`) and its receipt |
 | `live/openapi.json`                            | the gateway's real OpenAPI document (`/api/docs-json`)                                                                           |
 | `live/ready.json`, `live/metrics.json`         | live health + Prometheus output                                                                                                  |
+| `live/voiceover-manifest.json`                 | narration provenance — the TTS provider/voice used and each scene's generated clip length vs its budget                          |
 | `stellar-expert-tx.png`                        | the real transaction, captured from Stellar Expert                                                                               |
 | `repo.png`, `login.png`, `swagger*.png`        | the public repo page and the running dashboard                                                                                   |
 | dashboard screenshots                          | the real dashboard, authenticated with a real wallet session                                                                     |

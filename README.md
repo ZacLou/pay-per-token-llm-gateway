@@ -89,9 +89,11 @@ replay enforcement, the provider dashboard, and the architecture behind it.
 > for the full provenance table.
 
 <sub>
-Reproduce it, or record the narration: <a href="./video/README.md"><code>video/README.md</code></a> ·
-<code>node video/render.mjs</code> ·
-<code>node video/make-voiceover.mjs</code> (ElevenLabs / OpenAI / Cartesia / Gemini TTS)
+Reproduce it, or re-record the narration:
+<a href="./video/README.md"><code>video/README.md</code></a> ·
+<code>node video/render.mjs</code> (silent cut) ·
+<code>node video/make-voiceover.mjs --out docs/media/x402-gateway-demo.mp4</code>
+voices the featured file in place (ElevenLabs / OpenAI / Cartesia / Gemini TTS)
 </sub>
 
 ---
