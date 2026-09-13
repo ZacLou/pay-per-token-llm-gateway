@@ -182,6 +182,18 @@ async function main() {
     return;
   }
 
+  // Thumbnail from a chosen moment of the open scene, captured while the stage
+  // is still freshly booted. Capturing it after the frame loop instead left CSS
+  // transitions and scene-local state mid-flight, so the committed PNG changed
+  // on every render even though the frames themselves are deterministic. The
+  // reload restores the clean boot the encoder loop expects to start from.
+  const thumbAt = Number(argOf('thumb-at', 5.0));
+  await page.evaluate((t) => window.__VIDEO.render(t), thumbAt);
+  await page.screenshot({ path: THUMB });
+  log(`  thumbnail → ${path.relative(ROOT, THUMB)}`);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction('window.__READY === true || window.__ERROR', null, { timeout: 60000 });
+
   const tmp = path.join(os.tmpdir(), `x402-video-${Date.now()}.mp4`);
   const encoder = spawn(
     'ffmpeg',
@@ -265,12 +277,6 @@ async function main() {
     c.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`mux exited ${code}`))));
   });
   await rm(tmp, { force: true });
-
-  // Thumbnail from a chosen moment of the open scene.
-  const thumbAt = Number(argOf('thumb-at', 5.0));
-  await page.evaluate((t) => window.__VIDEO.render(t), thumbAt);
-  await page.screenshot({ path: THUMB });
-  log(`  thumbnail → ${path.relative(ROOT, THUMB)}`);
 
   await browser.close();
   server.close();

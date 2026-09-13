@@ -41,30 +41,30 @@
     },
     {
       "id": "problem",
-      "duration": 31,
+      "duration": 24,
       "title": "The problem",
       "cues": [
         {
           "at": 0.4,
-          "text": "Today, access to a model is gated by <b>billing infrastructure</b>, not by the model."
+          "text": "Access to a model is gated by <b>billing</b>, not by the model."
         },
         {
-          "at": 7.4,
-          "text": "An account, an API key, a quota. <b>An autonomous agent cannot sign up for a card.</b>"
+          "at": 6.4,
+          "text": "An account, an API key, a quota. <b>An agent cannot open one.</b>"
         },
         {
-          "at": 15.4,
-          "text": "Traffic is bursty, but the bill is a <b>flat subscription</b> — you pay for capacity you never use."
+          "at": 12.4,
+          "text": "Traffic is bursty, but the bill is flat for capacity you never use."
         },
         {
-          "at": 23.4,
-          "text": "And every team rebuilds metering, invoicing and dunning from scratch."
+          "at": 18.4,
+          "text": "And every team rebuilds metering, invoicing and dunning."
         }
       ]
     },
     {
       "id": "protocol",
-      "duration": 31,
+      "duration": 24,
       "title": "HTTP 402",
       "cues": [
         {
@@ -72,16 +72,16 @@
           "text": "The fix is already in the HTTP spec — <b>unused since 1997</b>."
         },
         {
-          "at": 7.6,
+          "at": 6.2,
           "text": "<b>402 Payment Required</b> — a status code reserved for exactly this."
         },
         {
-          "at": 15.0,
-          "text": "x402 makes it real: the server returns a quote, the client pays, then retries with proof."
+          "at": 12.0,
+          "text": "x402 makes it real: a quote, a payment, then a retry."
         },
         {
-          "at": 24.4,
-          "text": "No signup. No subscription. <b>No API key.</b> Just a wallet and a per-request price."
+          "at": 17.4,
+          "text": "No signup, no subscription, <b>no API key</b> — just a wallet and a price."
         }
       ]
     },
@@ -114,59 +114,63 @@
     },
     {
       "id": "live",
-      "duration": 49,
+      "duration": 52,
       "title": "Live on testnet",
       "cues": [
         {
           "at": 0.4,
-          "text": "This is not a mock-up. These are live responses from the gateway running against <b>Stellar testnet</b>."
+          "text": "This is not a mock-up — these are live responses from the gateway running against <b>Stellar testnet</b>."
         },
         {
-          "at": 13.4,
-          "text": "An unpaid request returns a real quote: amount, asset, issuer, destination and an expiry window."
+          "at": 12.5,
+          "text": "An unpaid request returns a real quote: amount, asset, issuer, destination, and an expiry window."
         },
         {
-          "at": 21.6,
-          "text": "The client pays one tenth of a USDC — confirmed on-chain, and public on Stellar Expert."
+          "at": 20.5,
+          "text": "The client pays one tenth of a USDC — a real, on-chain payment."
         },
         {
-          "at": 30.6,
-          "text": "Retry with that hash: <b>HTTP 200</b>, the model response, and a payment receipt."
+          "at": 27.0,
+          "text": "Retry with that hash: <b>HTTP 200</b> and a payment receipt."
         },
         {
-          "at": 39.2,
-          "text": "Pay once, spend once — replaying the hash is refused. A forged hash is refused too: the gateway <b>fails closed</b>, never open."
+          "at": 33.5,
+          "text": "Pay once, spend once — replaying the hash is refused."
+        },
+        {
+          "at": 39.0,
+          "text": "A forged hash is refused too. The gateway <b>fails closed</b>."
+        },
+        {
+          "at": 46.5,
+          "text": "And the payment is public on Stellar Expert."
         }
       ]
     },
     {
       "id": "product",
-      "duration": 45,
+      "duration": 28,
       "title": "The product",
       "cues": [
         {
-          "at": 0.4,
+          "at": 1.0,
           "text": "Providers get a real operational surface, not just a proxy."
         },
         {
-          "at": 7.0,
-          "text": "Revenue, paid versus unpaid requests, and latency — with a live time-series."
+          "at": 6.2,
+          "text": "Realtime revenue, paid versus unpaid traffic, and latency."
         },
         {
-          "at": 14.0,
-          "text": "Routes carry their own upstream, model and pricing: flat-rate or <b>per token</b>."
+          "at": 11.4,
+          "text": "Routes carry their own upstream, model and pricing."
         },
         {
-          "at": 22.0,
-          "text": "Every payment is recorded with its transaction hash, payer and ledger."
+          "at": 16.6,
+          "text": "Every payment is recorded with its hash, payer and ledger."
         },
         {
-          "at": 30.0,
-          "text": "Audit trail, wallet-authenticated sessions, webhooks and a persisted notification feed."
-        },
-        {
-          "at": 38.0,
-          "text": "And escrow balances for prepaid credit."
+          "at": 21.8,
+          "text": "Plus a full audit trail, webhooks, and escrow for prepaid credit."
         }
       ]
     },

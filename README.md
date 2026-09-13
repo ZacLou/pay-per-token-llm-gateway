@@ -62,7 +62,7 @@
   >
 </p>
 
-Five minutes, start to finish: the problem, the HTTP 402 protocol, a **real
+Five minutes (4:49), start to finish: the problem, the HTTP 402 protocol, a **real
 Stellar testnet payment** that returns a successful paid response, single-use
 replay enforcement, the provider dashboard, and the architecture behind it.
 
@@ -70,14 +70,14 @@ replay enforcement, the provider dashboard, and the architecture behind it.
 | --------- | --------------------------- | --------------------------------------------------------------------------- |
 | `0:00`    | Cold open                   | Pay-per-request AI, settled on Stellar                                      |
 | `0:09`    | The problem                 | Keys, subscriptions and duplicated billing                                  |
-| `0:40`    | The protocol                | `402 Payment Required`, and a live quote response                           |
-| `1:11`    | How it works                | The five-step money path, animated                                          |
-| `1:52`    | **Live on Stellar testnet** | A real USDC payment, a paid `200` + receipt, then replay + forged rejection |
-| `2:41`    | The product                 | Provider dashboard: analytics, routes, payments, audit, webhooks, escrow    |
-| `3:26`    | Architecture & code         | Monorepo, three-layer replay protection, Soroban + TypeScript source        |
-| `4:07`    | Differentiation             | Why Stellar's cost and finality make sub-cent payments viable               |
-| `4:37`    | Engineering & audit status  | CI gates, security scans, and the honest mainnet gate                       |
-| `5:00`    | Close                       | Quickstart and repo                                                         |
+| `0:33`    | The protocol                | `402 Payment Required`, and a live quote response                           |
+| `0:57`    | How it works                | The five-step money path, animated                                          |
+| `1:38`    | **Live on Stellar testnet** | A real USDC payment, a paid `200` + receipt, then replay + forged rejection |
+| `2:30`    | The product                 | Provider dashboard: analytics, routes, payments, audit, escrow              |
+| `2:58`    | Architecture & code         | Monorepo, three-layer replay protection, Soroban + TypeScript source        |
+| `3:39`    | Differentiation             | Why Stellar's cost and finality make sub-cent payments viable               |
+| `4:09`    | Engineering & audit status  | CI gates, security scans, and the honest mainnet gate                       |
+| `4:32`    | Close                       | Quickstart and repo                                                         |
 
 > **Everything on screen was captured from a running stack.** The dashboard
 > screenshots come from a live gateway with Postgres and Redis, and the

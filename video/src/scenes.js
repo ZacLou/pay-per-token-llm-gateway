@@ -219,10 +219,32 @@ function sceneProblem() {
     ],
   );
 
+  // Empty slots hold the layout from the first frame, so the scene has visible
+  // structure while the opening line plays and each card fills its slot on the
+  // cue that explains it (6.4 / 12.4 / 18.4).
+  const slots = cards.map((card) => {
+    const ghost = el('div', {
+      class: 'card',
+      style: {
+        position: 'absolute',
+        inset: '0',
+        background: 'transparent',
+        'border-style': 'dashed',
+        opacity: '0',
+      },
+    });
+    // `display: grid` makes the card stretch to the slot box, so the ghost
+    // outline always matches the card it is standing in for.
+    return {
+      slot: el('div', { style: { position: 'relative', display: 'grid' } }, [ghost, card]),
+      ghost,
+    };
+  });
+
   const grid = el(
     'div',
     { style: { display: 'grid', 'grid-template-columns': 'repeat(3,1fr)', gap: '26px' } },
-    cards,
+    slots.map((sl) => sl.slot),
   );
   const node = el('div', {}, [
     header('The problem', 'AI access is gated by billing infrastructure', s),
@@ -230,8 +252,19 @@ function sceneProblem() {
     footer,
   ]);
 
-  cards.forEach((c, i) => s.add(c, 0.9 + i * 0.28, 0.6, { y: 32 }));
-  s.add(footer, 2.6, 0.6, { y: 24 });
+  const CARD_AT = [5.9, 11.9, 17.9];
+  const GHOST_AT = [0.7, 0.95, 1.2];
+
+  cards.forEach((c, i) => s.add(c, CARD_AT[i], 0.62, { y: 30 }));
+  s.add(footer, 21.5, 0.6, { y: 24 });
+
+  s.tick((t) => {
+    slots.forEach((sl, i) => {
+      const inP = easeOut(seg(t, GHOST_AT[i], 0.5));
+      const filled = easeOut(seg(t, CARD_AT[i], 0.62));
+      style(sl.ghost, { opacity: String(0.55 * inP * (1 - filled)) });
+    });
+  });
 
   return { node, update: s.update };
 }
@@ -262,10 +295,18 @@ HTTP/1.1 402 Payment Required
   const code = el('div', { class: 'code', style: { fontSize: '19px' } });
   code.append(highlight(codeText, 'json'));
 
+  // An annotation parked beside the 402 status line, revealed on the cue that
+  // calls it out. Without it the right column is empty for the first 12s.
+  const badge = el('div', { class: 'callout', style: { right: '20px', top: '64px' } }, [
+    el('div', { class: 'bullet' }),
+    el('div', { text: 'reserved for exactly this' }),
+  ]);
+  const codeWrap = el('div', { style: { position: 'relative' } }, [badge, code]);
+
   const notes = [
     ['Machine-payable', 'The price travels inside the response. A program can read it and pay it.'],
-    ['Permissionless', 'Access is a wallet, not an identity. No signup, no approval.'],
     ['Per request', 'You pay for the calls you make — nothing else.'],
+    ['Permissionless', 'Access is a wallet, not an identity. No signup, no approval.'],
   ].map(([title, body]) =>
     el('div', { style: { display: 'grid', gap: '7px' } }, [
       el('div', { style: { 'font-size': '22px', 'font-weight': '700' }, text: title }),
@@ -273,30 +314,49 @@ HTTP/1.1 402 Payment Required
     ]),
   );
 
+  const notesWrap = el(
+    'div',
+    { style: { display: 'grid', gap: '26px', 'align-content': 'start' } },
+    notes,
+  );
+
   const node = el('div', {}, [
     header('The protocol', '402 Payment Required, finally used', s),
     el('div', { style: { display: 'grid', 'grid-template-columns': '1.32fr 1fr', gap: '34px' } }, [
-      code,
-      el('div', { style: { display: 'grid', gap: '26px', 'align-content': 'start' } }, notes),
+      codeWrap,
+      notesWrap,
     ]),
   ]);
 
-  s.add(code.parentElement.children[0], 0.7, 0.6, { y: 26 });
-  s.add(code.parentElement.children[1], 0.95, 0.6, { y: 26 });
+  s.add(codeWrap, 0.7, 0.6, { y: 26 });
+  s.add(notesWrap, 0.95, 0.6, { y: 26 });
 
-  // Reveal the exchange line by line, as it would appear on the wire.
+  // Reveal the exchange as it would appear on the wire, in step with the voice:
+  // request + status, then an annotation on the 402 line, then the quote body as
+  // the narrator describes what a caller gets back.
   const sourceLines = codeText.split('\n');
+  const REVEAL = [0.9, 1.5, 2.2, 3.1, 3.7];
+  while (REVEAL.length < sourceLines.length) {
+    const i = REVEAL.length;
+    REVEAL.push(i < 14 ? 12.3 + (i - 5) * 0.4 : 17.6 + (i - 14) * 0.5);
+  }
+
   let shown = -1;
   s.tick((t) => {
-    const visible = Math.floor(easeOut(seg(t, 1.0, 4.4)) * sourceLines.length);
+    const visible = REVEAL.filter((at) => t >= at).length;
     if (visible === shown) return;
     shown = visible;
-    const text = sourceLines.map((l, i) => (i <= visible ? l : '')).join('\n');
+    const done = visible >= sourceLines.length;
+    const text = sourceLines
+      .slice(0, visible)
+      .map((l, i) => (i === visible - 1 && !done ? `${l}▌` : l))
+      .join('\n');
     code.textContent = '';
     code.append(highlight(text, 'json'));
   });
 
-  notes.forEach((n, i) => s.add(n, 5.4 + i * 0.4, 0.55, { y: 22 }));
+  s.add(badge, 6.2, 0.5, { x: 18, y: 0 }); // "a status code reserved for exactly this"
+  notes.forEach((n, i) => s.add(n, [6.4, 12.4, 17.4][i] ?? 6.4, 0.55, { y: 22 }));
 
   return { node, update: s.update };
 }
@@ -635,8 +695,37 @@ function sceneLive({ data }) {
 
   s.add(panelA, 0.6, 0.6, { y: 26 });
 
-  // Phase switches: A (0-26s) → B (26-49s).
-  const PHASE_B = 26;
+  // Each terminal line lands just before the narration cue it illustrates, so
+  // the terminal keeps moving while the rejections are being explained instead
+  // of finishing in twenty seconds and sitting still for the rest of the scene.
+  const REVEAL = [
+    1.0, // curl — "these are live responses"
+    2.2, // request body
+    7.2, // HTTP 402 headline
+    12.4, // quote.amount    ← cue "returns a real quote"
+    13.8, // quote.asset
+    15.2, // quote.memo
+    16.6, // quote.expires
+    17.4, // blank
+    19.9, // pay it on Stellar testnet ← cue "the client pays"
+    21.1, // tx
+    22.4, // ledger
+    23.2, // blank
+    26.3, // retry with the payment hash ← cue "retry with that hash"
+    27.3, // HTTP 200
+    28.6, // receipt
+    29.4, // blank
+    32.7, // replay the SAME hash ← cue "pay once, spend once"
+    33.7, // HTTP 402 replay
+    35.4, // blank
+    38.3, // forged hash ← cue "a forged hash is refused too"
+    39.3, // HTTP 402 forged
+  ];
+  const revealAt = (i) => REVEAL[i] ?? 1.2 + (i / lines.length) * 21;
+
+  // Phase switches: A (0-45s, the terminal) → B (45-52s, the explorer), so the
+  // on-chain proof lands on the cue that mentions it.
+  const PHASE_B = 45;
   s.tick((t) => {
     const aOut = clamp01((t - PHASE_B) / 0.6);
     style(panelA, { opacity: String(1 - aOut), 'pointer-events': 'none' });
@@ -648,21 +737,25 @@ function sceneLive({ data }) {
       transform: `translate3d(0, ${(1 - easeOut(bIn)) * 30}px, 0)`,
     });
 
-    // Type the terminal out over the first ~22 seconds.
-    const total = 21;
+    // Type each line on its own reveal time, and flash a tint on the one the
+    // narrator is currently talking about.
     lines.forEach((l, i) => {
-      const at = 1.2 + (i / lines.length) * total;
+      const at = revealAt(i);
       const p = clamp01((t - at) / 0.28);
-      style(termLineNodes[i], { opacity: String(p) });
+      const row = termLineNodes[i];
+      style(row, { opacity: String(p) });
       if (p > 0 && p < 1) {
-        termLineNodes[i].textContent = l.text.slice(0, Math.ceil(l.text.length * p)) + '▌';
+        row.textContent = l.text.slice(0, Math.ceil(l.text.length * p)) + '▌';
       } else {
-        termLineNodes[i].textContent = p >= 1 ? l.text || ' ' : '';
+        row.textContent = p >= 1 ? l.text || ' ' : '';
       }
+      const flash = l.text && t >= at ? clamp01(1 - (t - at - 0.3) / 1.1) : 0;
+      row.style.background = flash > 0 ? `rgba(34,197,94,${(0.13 * flash).toFixed(3)})` : '';
+      row.style.boxShadow = flash > 0 ? 'inset 3px 0 0 rgba(34,197,94,.5)' : '';
     });
 
     // Ken Burns on the explorer screenshot.
-    const kb = seg(t, PHASE_B + 0.6, 20);
+    const kb = seg(t, PHASE_B + 0.5, 6.5);
     style(explorer, {
       transform: `scale(${lerp(1.06, 1.0, easeOut(kb))}) translate3d(0,${lerp(0, -6, easeOut(kb))}px,0)`,
     });
@@ -676,18 +769,20 @@ function sceneLive({ data }) {
 function sceneProduct() {
   const s = stage();
 
+  // Five shots, one per narration cue: analytics → routes → payments → audit
+  // → escrow. Eight shots at 5.4s each read as a slideshow and outran the voice.
   const shots = [
     ['dashboard.png', 'Revenue, paid vs unpaid traffic, and latency', '/'],
     ['routes.png', 'Routes: upstream, model and pricing per endpoint', '/routes'],
     ['payments-table.png', 'Every payment, with its on-chain transaction hash', '/payments'],
     ['audit.png', 'Immutable audit trail of gateway operations', '/audit'],
-    ['notifications.png', 'Persisted notification feed with read state', '/notifications'],
-    ['webhooks.png', 'Signed webhook delivery, revalidated at send time', '/webhooks'],
     ['escrow.png', 'Prepaid credit balances held in escrow', '/escrow'],
-    ['settings.png', 'Provider wallet, payout address and secrets', '/settings'],
   ];
 
-  const PER = 5.4;
+  // The first shot is on screen for the opening line; the rest advance on the
+  // cues at 6.2 / 11.4 / 16.6 / 21.8.
+  const START = 1.0;
+  const PER = 5.25;
   const frames = shots.map(([file, caption, route]) => {
     const img = el('img', { src: asset(file), style: { display: 'block', width: '100%' } });
     const frame = el('div', { class: 'shot', style: { opacity: '0' } }, [
@@ -759,15 +854,15 @@ function sceneProduct() {
 
   let activeShot = -1;
   s.tick((t) => {
-    const current = Math.max(0, Math.min(frames.length - 1, Math.floor((t - 1.1) / PER)));
+    const current = Math.max(0, Math.min(frames.length - 1, Math.floor((t - START) / PER)));
     if (current !== activeShot) {
       activeShot = current;
       label.textContent = frames[current].caption;
     }
-    label.style.opacity = String(easeOut(seg(t, 1.0, 0.5)));
+    label.style.opacity = String(easeOut(seg(t, START - 0.1, 0.5)));
 
     frames.forEach((f, i) => {
-      const start = 1.1 + i * PER;
+      const start = START + i * PER;
       const local = t - start;
       const visible = local > -0.6 && local < PER + 0.4;
       const inP = easeOut(seg(local, 0, 0.55));
