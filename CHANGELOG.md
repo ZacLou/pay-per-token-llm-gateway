@@ -6,6 +6,40 @@ All notable changes to the x402 LLM Gateway project.
 
 ## [Unreleased] — 2026-09-13
 
+### Security
+
+- **Dependency advisories cleared and the scan is now a gate.** `js-yaml`
+  4.3.1 → 5.4.1 and `smol-toml` 1.6.1 → 1.8.0 (new `pnpm-workspace.yaml`
+  override floors); in `python/uv.lock` `urllib3` 2.6.3 → 2.7.0,
+  `langchain-core` 0.3.86 → 1.6.3, `langsmith` 0.4.37 → 0.12.4, `requests`
+  2.32.5 → 2.34.2, `orjson` 3.11.5 → 3.12.0 and `pytest` 8.4.2 → 9.1.1. The
+  PyPI packages were each pinned **twice** — a patched pin for 3.10+ and an
+  unpatched one for the `>=3.9` branch — so `python/pyproject.toml` now
+  requires Python `>=3.10` (3.9 is EOL with no patched releases) and the lock
+  resolves as a single branch; 47/47 SDK tests pass on the new pins.
+  osv-scanner: **28 → 15** advisories; Trivy fs: **0 HIGH/CRITICAL**.
+- The osv-scanner CI job no longer swallows its exit code. Findings that are
+  not explicitly reviewed in the new `.osv-scanner.toml` now **fail the
+  build**, and every exception there carries a reason and an `ignoreUntil`
+  expiry. The remaining 15 are the advisories with no patched release at any
+  version (`image-size` ×2, `adm-zip`, `paste`, `derivative`) and the crates
+  pinned by the Soroban SDK the contracts build against
+  (`soroban-env-host`, `stellar-xdr`) — see `MAINNET_READINESS.md` §7.
+- **Explicit `TRUST_PROXY`:** the Express `trust proxy` setting is now
+  **disabled by default** (forwarding headers ignored) instead of defaulting to
+  `1`. A directly-exposed gateway can no longer be tricked into honouring a
+  forged `X-Forwarded-For`; production starts log a warning when it is unset.
+  Set `TRUST_PROXY=1`/`loopback`/a proxy IP list only behind a real proxy.
+- **Wallet-based rate limiting:** the paid tier is now keyed by the
+  server-verified payer wallet on the confirmed payment row, not the client IP,
+  so rotating source addresses cannot mint fresh buckets. Unpaid requests
+  remain per-IP.
+- **Payout hardening:** payout automation validates `payoutWalletAddress` with
+  `StrKey.isValidEd25519PublicKey`, re-checks provider approval/active state at
+  proposal time, and refuses to pay when the destination changed. The
+  threshold-1 auto-approve now derives the signer address from the signing key
+  and records the real approver.
+
 ### Fixed
 
 - **Paid retry now succeeds end to end.** `POST /api/v1/chat/completions` with a
@@ -26,40 +60,6 @@ quote was issued"`. At retry time no `Payment` row carried the hash yet (the
   replay protection claimed on first sight, so later captures reported
   "Payment already used" instead of the intended fail-closed
   "Transaction not found on chain". Captures now use a random unseen hash.
-
-### Added
-
-- **Product pitch video** (`docs/media/x402-gateway-demo.mp4`, 1080p, ~5 min)
-  with thumbnail, burned-in captions and an `.srt`, featured in the README. It
-  is rendered from a deterministic stage fed by assets captured from a live
-  gateway + dashboard, and now shows the full paid flow: a real Stellar testnet
-  USDC payment, a `200` with payment receipt, then replay and forged-hash
-  rejection. Pipeline and provenance: `video/README.md`.
-- **Provider-agnostic narration:** `video/make-voiceover.mjs` synthesizes the
-  voice-over with ElevenLabs, OpenAI, Cartesia or Gemini (all normalized to
-  24 kHz mono) and muxes it onto the video.
-- **`pnpm video:check`** (and a `Video Narration Timing` CI job) fails the build
-  when any narration cue would overrun the scene budget it is spoken over.
-
-### Security
-
-- **Explicit `TRUST_PROXY`:** the Express `trust proxy` setting is now
-  **disabled by default** (forwarding headers ignored) instead of defaulting to
-  `1`. A directly-exposed gateway can no longer be tricked into honouring a
-  forged `X-Forwarded-For`; production starts log a warning when it is unset.
-  Set `TRUST_PROXY=1`/`loopback`/a proxy IP list only behind a real proxy.
-- **Wallet-based rate limiting:** the paid tier is now keyed by the
-  server-verified payer wallet on the confirmed payment row, not the client IP,
-  so rotating source addresses cannot mint fresh buckets. Unpaid requests
-  remain per-IP.
-- **Payout hardening:** payout automation validates `payoutWalletAddress` with
-  `StrKey.isValidEd25519PublicKey`, re-checks provider approval/active state at
-  proposal time, and refuses to pay when the destination changed. The
-  threshold-1 auto-approve now derives the signer address from the signing key
-  and records the real approver.
-
-### Fixed
-
 - **SSE payment receipts are now reliable:** the upstream `data: [DONE]`
   sentinel is withheld and re-emitted _after_ the trailing `x402_receipt`
   event, so clients that stop at `[DONE]` still receive the receipt; the SDK
@@ -81,6 +81,17 @@ quote was issued"`. At retry time no `Payment` row carried the hash yet (the
 
 ### Added
 
+- **Product pitch video** (`docs/media/x402-gateway-demo.mp4`, 1080p, ~5 min)
+  with thumbnail, burned-in captions and an `.srt`, featured in the README. It
+  is rendered from a deterministic stage fed by assets captured from a live
+  gateway + dashboard, and now shows the full paid flow: a real Stellar testnet
+  USDC payment, a `200` with payment receipt, then replay and forged-hash
+  rejection. Pipeline and provenance: `video/README.md`.
+- **Provider-agnostic narration:** `video/make-voiceover.mjs` synthesizes the
+  voice-over with ElevenLabs, OpenAI, Cartesia or Gemini (all normalized to
+  24 kHz mono) and muxes it onto the video.
+- **`pnpm video:check`** (and a `Video Narration Timing` CI job) fails the build
+  when any narration cue would overrun the scene budget it is spoken over.
 - **Persisted in-app notifications:** `POST/GET /api/v1/notifications` backed
   by a Postgres `Notification` row (with `read`/`readAt` state), plus a
   dashboard `/notifications` feed with read controls. Migration

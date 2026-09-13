@@ -242,17 +242,47 @@ platform-express) and `svgo 3.3.4` (2 ReDoS advisories, build-tooling via
 
 > =3.3.5`), verified by the local matrix. `pnpm audit` remains **0 critical**;
 
-| Package           | Severity | Why not fixed                                                                                                                                                                                         | Track                                                                         |
-| ----------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `image-size` (×2) | high     | **no patched version exists** (patched: null; vulnerable ≤2.0.2, latest 2.0.2); dev-only transitive of `less@4.1.3` via the unused `@nx/vite`→vite→less chain (this project uses no vite/vitest/less) | drop the `@nx/vite`/`@nx/module-federation` chain or wait for an upstream fix |
+**Updated 2026-09-13 — the open count is now enforced, not observed.**
+The osv-scanner CI job used to swallow its exit code (`|| true`), so every new
+advisory silently became another open alert. It is now a **gate**: anything
+not explicitly reviewed in `.osv-scanner.toml` fails the build, and each
+exception there carries a reason plus an `ignoreUntil` expiry so it is
+re-reviewed instead of aging out unnoticed.
 
-**Rust (contracts) — report-only, via osv-scanner on the committed Cargo.lock
+Two upgrade tracks closed in the same pass:
+
+| Fixed                          | From → To                                             | How                                                                                                                    |
+| ------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `js-yaml` (npm, high)          | 4.3.1 → **5.4.1**                                     | the existing `>=4.3.1` override predated GHSA-2883-xcg3-v3hh (patched in 4.3.2); floor raised in `pnpm-workspace.yaml` |
+| `smol-toml` (npm, high)        | 1.6.1 → **1.8.0**                                     | new `smol-toml >=1.7.1` override (GHSA-7w5x-hrqm-74c2)                                                                 |
+| `urllib3` (PyPI, high ×2)      | 2.6.3 → **2.7.0**                                     | `uv lock` after raising `requires-python`                                                                              |
+| `langchain-core` (PyPI)        | 0.3.86 → **1.6.3**                                    | idem — 47/47 SDK tests pass on langchain-core 1.x                                                                      |
+| `langsmith` (PyPI ×4)          | 0.4.37 → **0.12.4**                                   | idem                                                                                                                   |
+| `requests`, `orjson`, `pytest` | 2.32.5→**2.34.2**, 3.11.5→**3.12.0**, 8.4.2→**9.1.1** | idem                                                                                                                   |
+
+All of the PyPI items existed in the lockfile **twice**: a patched pin for
+3.10+ and an unpatched one for the `>=3.9` resolution branch. Python 3.9 is EOL
+and has no patched releases for those packages, so `python/pyproject.toml` now
+requires `>=3.10` and the lock is single-branch. `python/README.md` and the
+classifier list were updated to match.
+
+Net effect on the scanners: **osv-scanner 28 → 15** advisories (11 PyPI and 2
+npm cleared) and **Trivy fs 0 HIGH/CRITICAL** across all five lockfiles.
+
+| Package           | Severity | Why not fixed                                                                                                                                                                                                                                                      | Track                                                                         |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `image-size` (×2) | high     | **no patched version exists** (osv.dev lists no fixed release; vulnerable ≤2.0.2, latest 2.0.2); dev-only transitive of `less@4.1.3` via the `@nx/vite`→vite→less and `@nx/webpack` chains (this project uses no vite/vitest/less)                                 | drop the `@nx/vite`/`@nx/module-federation` chain or wait for an upstream fix |
+| `adm-zip`         | moderate | **no patched version exists** (0.6.0 is both the latest release and the fixed floor for the _other_ adm-zip advisory, GHSA-xcpc-8h2w-3j85); extraction-follows-symlink, build-time only via `@module-federation/dts-plugin` → `@nx/module-federation` → `@nx/next` | upstream fix only                                                             |
+
+**Rust (contracts) — review-gated, via osv-scanner on the committed Cargo.lock
 files** (tracked 2026-09-09): `soroban-env-host`/`stellar-xdr`
-(GHSA-pm4j-7r4q-ccg8, GHSA-vwc7-r8mq-g2x9, GHSA-x57h-xx53-v53w) and
-`paste` (RUSTSEC-2024-0388) / `derivative` (RUSTSEC-2024-0436, derive-macro
+(GHSA-pm4j-7r4q-ccg8, GHSA-x57h-xx53-v53w) and `paste`
+(RUSTSEC-2024-0436) / `derivative` (RUSTSEC-2024-0388, derive-macro
 hygiene). All are pinned by the soroban-sdk version the contracts build
-against; bumping them means a Soroban SDK upgrade, which is deliberately
-held until the third-party contract audit (MAINNET_READINESS §1) — the
+against; bumping them means a Soroban SDK **26** upgrade
+(`soroban-env-host 26.0.0`, `stellar-xdr 25.0.1`), which is deliberately
+held until the third-party contract audit (MAINNET_READINESS §1) because it
+changes the compiled wasm behind the deployed testnet contracts. The
 advisories are low-risk for these contracts and do not affect the gateway
 runtime.
 

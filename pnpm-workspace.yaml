@@ -58,7 +58,17 @@ overrides:
   # unverified API change for the plugin); postcss-svgo keeps its own svgo 4.
   '@svgr/plugin-svgo>svgo': '>=3.3.5 <4'
   lodash: '>=4.18.1'
-  js-yaml: '>=4.3.1'
+  # js-yaml: GHSA-2883-xcg3-v3hh (maxTotalMergeKeys does not limit CPU use for
+  # empty merge sources) patches the 4.x line in 4.3.2 — the previous >=4.3.1
+  # floor covered an older advisory and left the installed 4.3.1 exposed. The
+  # floor is deliberately unbounded, so pnpm takes the highest match and the
+  # tree lands on the 5.x line (5.4.1) rather than 4.3.2. That is fine: 5.4.1
+  # still ships the CommonJS entry the istanbul/babel chain requires
+  # (`dist/js-yaml.cjs.js`), confirmed by `nx test config`.
+  js-yaml: '>=4.3.2'
+  # smol-toml: GHSA-7w5x-hrqm-74c2 (DoS via malformed TOML) patched in 1.7.1;
+  # nx's own TOML reader. Build-time tooling only.
+  smol-toml: '>=1.7.1'
   toml: '>=4.2.0'
   postcss: '>=8.5.23'
   file-type: '>=21.3.2'

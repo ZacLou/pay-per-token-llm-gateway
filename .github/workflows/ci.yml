@@ -557,10 +557,13 @@ jobs:
       # Fail the build on any critical advisory. The last runtime-reachable
       # advisories were resolved by the NestJS 11 / Next 15 major upgrades and
       # the nx 22 migration (2026-09-08); the remainder are dev/build-tooling
-      # only (2 high, both image-size — no patched release, unused @nx/vite
-      # chain) and tracked in MAINNET_READINESS.md §7. Reachable runtime
-      # advisories in the gateway tree (express, ws, body-parser, qs, …) stay
-      # pinned via overrides in pnpm-workspace.yaml.
+      # only — 2 high `image-size` (no patched release at any version; the
+      # unused @nx/vite → less chain) and 1 moderate `adm-zip` (no patched
+      # release; @module-federation's build-time dts plugin) — and each is
+      # listed with its reason in .osv-scanner.toml, tracked in
+      # MAINNET_READINESS.md §7. Reachable runtime advisories in the gateway
+      # tree (express, ws, body-parser, qs, …) stay pinned via overrides in
+      # pnpm-workspace.yaml.
       - run: pnpm audit --audit-level=critical
       - name: Report full advisory summary (non-blocking)
         run: pnpm audit --audit-level=high || true
@@ -597,11 +600,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Filesystem scan (lockfiles + manifests + source). Report-only for
-      # now: remaining findings are dev/build-tooling advisories (2 high,
-      # both image-size, no patched release) with no runtime-reachable path;
-      # the hard gate is the `security` job's critical-level pnpm audit.
-      # Findings land in the GitHub Security tab via SARIF.
+      # Filesystem scan (lockfiles + manifests + source). HIGH/CRITICAL only,
+      # and Trivy suppresses dev dependencies by default, so what lands here is
+      # runtime-reachable. Findings go to the GitHub Security tab via SARIF.
+      # Clean as of 2026-09-13; the dev-only residuals (image-size, adm-zip)
+      # are gated by the osv-scanner job instead, which scans the full lockfile.
       # v0.28.0 is broken upstream (it references the nonexistent
       # aquasecurity/setup-trivy@v0.2.1); v0.36.0 pins setup-trivy by full SHA
       # to v0.2.6, which exists.
@@ -627,19 +630,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Scans all lockfiles (pnpm-lock.yaml, contracts Cargo.lock) against
-      # the OSV database. Report-only — see the `security` job for the gate.
+      # Scans every lockfile (pnpm-lock.yaml, python/uv.lock and the three
+      # contracts/*/Cargo.lock) against the OSV database — including dev
+      # dependencies, which the Trivy fs scan suppresses.
       #
-      # The osv-scanner-action composite only exposes scan-args (no
-      # fail-on-vuln input) and exits 1 whenever findings exist, so run the
-      # scanner image directly and swallow the exit code: findings are printed
-      # to the log, and the `security` job's critical gate remains the hard
-      # stop. `--recursive ./` is the action's own default scan-args.
+      # This is a GATE, not a report: osv-scanner exits 1 on any finding, so an
+      # advisory that is not explicitly reviewed fails the build. The reviewed
+      # exceptions live in .osv-scanner.toml with a reason and an expiry date
+      # (advisories with no patched release, and the crates pinned by the
+      # Soroban SDK the contracts build against — see MAINNET_READINESS §7).
+      # The exit code used to be swallowed with `|| true`, which is exactly how
+      # the open-alert count grew unnoticed.
       - name: Run OSV scanner
         run: |
           docker run --rm -v "${{ github.workspace }}:/repo" -w /repo \
-            ghcr.io/google/osv-scanner-action:v2.5.1 --recursive ./ \
-            || true
+            ghcr.io/google/osv-scanner-action:v2.5.1 scan source --recursive \
+            --config /repo/.osv-scanner.toml ./
 
   dast:
     name: DAST (OWASP ZAP baseline)

@@ -1,0 +1,70 @@
+# Reviewed advisories that cannot be patched in this repository today.
+#
+# The `osv-scanner` CI job fails on any finding that is NOT listed here, so a
+# new advisory breaks the build instead of quietly adding another open alert to
+# the Security tab. Everything listed below is either:
+#
+#   (a) an advisory with no fixed release at any version, reachable only from
+#       dev/build tooling that never ships to the gateway or dashboard runtime,
+#       or
+#   (b) pinned by the Soroban SDK the on-chain contracts are compiled against.
+#
+# `ignoreUntil` is deliberate: when an entry expires the scan starts failing
+# again, so the exception gets re-reviewed instead of aging out silently.
+# Rationale and the full ledger live in MAINNET_READINESS.md §7.
+
+# ── npm: no patched release exists (dev/build tooling only) ──────────────────
+
+# image-size — infinite loops in the JXL/HEIF parsers. osv.dev reports no fixed
+# version for either advisory (vulnerable through the latest 2.0.2). Reached via
+# `less@4.1.3` under the `@nx/vite` → vite / `@nx/webpack` chains; this repo
+# compiles no LESS and never calls image-size at runtime.
+[[IgnoredVulns]]
+id = "GHSA-5p2g-fcmc-qvqq"
+ignoreUntil = 2026-12-31
+reason = "image-size has no patched release; dev/build tooling only (less via @nx/vite, @nx/webpack)"
+
+# image-size — same package, ICNS parser infinite loop; also no fixed version.
+[[IgnoredVulns]]
+id = "GHSA-w3rx-r6r6-pgpr"
+ignoreUntil = 2026-12-31
+reason = "image-size has no patched release; dev/build tooling only (less via @nx/vite, @nx/webpack)"
+
+# adm-zip — extraction follows destination symlinks. No fixed version (0.6.0 is
+# both the latest release and the fixed floor for the *other* adm-zip advisory,
+# GHSA-xcpc-8h2w-3j85). Reached only through
+# @module-federation/dts-plugin → @nx/module-federation → @nx/next, which runs
+# at build time against a fixed local directory.
+[[IgnoredVulns]]
+id = "GHSA-vwc7-r8mq-g2x9"
+ignoreUntil = 2026-12-31
+reason = "adm-zip has no patched release; build-time tooling only (@module-federation via @nx/next)"
+
+# ── Rust: pinned by the Soroban SDK the contracts build against ──────────────
+
+# soroban-env-host / stellar-xdr are pinned by `soroban-sdk = "22"`. The fixes
+# land in soroban-env-host 26 / stellar-xdr 25, i.e. a Soroban SDK major
+# upgrade that would change the compiled wasm behind the deployed testnet
+# contracts. Deliberately held until the third-party contract audit gates
+# mainnet (MAINNET_READINESS §1); neither crate is in the gateway runtime path.
+[[IgnoredVulns]]
+id = "GHSA-pm4j-7r4q-ccg8"
+ignoreUntil = 2026-12-31
+reason = "soroban-env-host pinned by soroban-sdk 22; fix requires the held Soroban SDK 26 upgrade (MAINNET_READINESS §7)"
+
+[[IgnoredVulns]]
+id = "GHSA-x57h-xx53-v53w"
+ignoreUntil = 2026-12-31
+reason = "stellar-xdr pinned by soroban-sdk 22; fix requires the held Soroban SDK 26 upgrade (MAINNET_READINESS §7)"
+
+# Unmaintained-crate advisories (proc-macro hygiene), again soroban-env-host
+# transitive dependencies. No patched release exists for either.
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0388"
+ignoreUntil = 2026-12-31
+reason = "derivative is unmaintained with no patched release; transitive via soroban-env-host"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+ignoreUntil = 2026-12-31
+reason = "paste is unmaintained with no patched release; transitive via soroban-env-host"

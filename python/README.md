@@ -27,7 +27,8 @@ pip install x402-sdk            # core SDK
 pip install x402-sdk[langchain] # + LangChain integration
 ```
 
-Requires Python 3.9+.
+Requires Python 3.10+ (3.9 is EOL and has no patched releases for several
+transitive dependencies).
 
 ## Quick start
 

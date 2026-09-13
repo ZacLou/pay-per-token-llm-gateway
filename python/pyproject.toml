@@ -7,7 +7,12 @@ name = "x402-sdk"
 version = "0.1.0"
 description = "Python SDK for x402 — automatic 402 → pay → retry for LLM gateways, with LangChain integration"
 readme = "README.md"
-requires-python = ">=3.9"
+# 3.9 is EOL and, more concretely, its resolution branch pins security
+# advisories that have no patched release for that interpreter
+# (langchain-core 0.3.x, langsmith 0.4.x, orjson 3.11.5, pytest 8.x,
+# requests 2.32.x, urllib3 2.6.3). The >=3.10 floor keeps the lock single-
+# branch and fully patched.
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "x402 contributors" }]
 keywords = ["x402", "stellar", "402", "llm", "payment", "langchain", "sdk"]
@@ -16,10 +21,11 @@ classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Communications :: Chat",
 ]
