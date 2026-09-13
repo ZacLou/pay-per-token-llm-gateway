@@ -541,6 +541,8 @@ describe('x402 Gateway E2E — Core Flow', () => {
     expect(receipt.txHash).toBe(TX);
     expect(receipt.status).toBe('confirmed');
     expect(typeof receipt.quoteId).toBe('string');
+    // #46: the receipt must name the route it paid for.
+    expect(receipt.route).toBe('/v1/chat/completions');
   });
 
   it('resolves a first-time payment to its originating quote via the on-chain memo', async () => {

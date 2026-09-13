@@ -113,6 +113,65 @@ jobs:
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
+  schema-drift:
+    name: Prisma Schema Drift
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: x402_drift
+          POSTGRES_USER: x402
+          POSTGRES_PASSWORD: x402_drift
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U x402"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version from .nvmrc
+        id: nvm
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvm.outputs.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # The backup/restore drill proves a fresh `migrate deploy` creates the
+      # tables the seed touches, but it cannot see index-level drift. The
+      # `Payment` single-use constraint was declared as `@@unique([txHash])`
+      # while the migration created only a PARTIAL index, so `db push` and
+      # `migrate deploy` produced different databases and `migrate diff`
+      # reported permanent drift (fixed 2026-09-13). This job makes that
+      # class of bug impossible to reintroduce.
+      - name: Apply migrations to a fresh database
+        working-directory: packages/database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://x402:x402_drift@localhost:5432/x402_drift
+
+      - name: Assert schema.prisma matches the migration history
+        working-directory: packages/database
+        run: |
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
+        env:
+          DATABASE_URL: postgresql://x402:x402_drift@localhost:5432/x402_drift
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest

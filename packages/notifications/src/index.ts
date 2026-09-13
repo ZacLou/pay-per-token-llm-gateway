@@ -138,6 +138,13 @@ export class WebhookNotificationHandler implements NotificationHandler {
           method: 'POST',
           headers,
           body, // identical body on every retry
+          // Never let a misbehaving receiver stall the caller.
+          signal: AbortSignal.timeout(10_000),
+          // SSRF: the destination was validated as a public IP before this
+          // call. Following a redirect would let the receiver bounce the
+          // request to internal infrastructure (e.g. 169.254.169.254),
+          // bypassing that check — so a redirect is treated as a failure.
+          redirect: 'error',
         });
 
         if (response.ok) {
@@ -197,6 +204,9 @@ export class WebhookNotificationHandler implements NotificationHandler {
           body,
           // Never let a misbehaving receiver stall payment processing.
           signal: AbortSignal.timeout(10_000),
+          // A redirect could bounce the signed payload to internal
+          // infrastructure, defeating the public-IP validation — reject it.
+          redirect: 'error',
         });
 
         if (response.ok) {

@@ -129,6 +129,11 @@ describe('ProxyService', () => {
         expect(mockRes.flushHeaders).toHaveBeenCalled();
         expect(mockRes.write).toHaveBeenCalled();
         expect(mockRes.end).toHaveBeenCalled();
+        // SSRF: the streaming upstream fetch must not follow redirects either.
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ redirect: 'error' }),
+        );
       } finally {
         global.fetch = originalFetch;
       }
@@ -402,6 +407,8 @@ describe('ProxyService', () => {
           upstreamUrl,
           expect.objectContaining({
             method: 'POST',
+            // SSRF: the upstream request must never follow a redirect.
+            redirect: 'error',
             headers: expect.objectContaining({
               'Content-Type': 'application/json',
               Authorization: 'Bearer sk-test-key',

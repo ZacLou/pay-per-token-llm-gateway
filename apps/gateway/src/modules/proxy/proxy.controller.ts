@@ -27,7 +27,6 @@ import { getConfig } from '@x402/config';
 import { logger } from '@x402/logger';
 import { generateId } from '@x402/shared';
 import { settleEscrow } from '../x402/escrow-client';
-import { chargeEscrowOnChain } from '../x402/contract-client';
 import type { ChatCompletionRequest, PaymentRecord, Quote, RouteConfig } from '@x402/types';
 
 @ApiTags('proxy')
@@ -656,6 +655,7 @@ export class ProxyController {
           payerAddress: payment.payerAddress,
           amount: payment.amount?.toString(),
           asset: payment.asset,
+          route: route.path,
           status: payment.status,
           actualCost: payment.amount?.toString() || '0',
           tokensUsed: null,
@@ -696,6 +696,9 @@ export class ProxyController {
             payerAddress: payment.payerAddress,
             amount: payment.amount?.toString(),
             asset: payment.asset,
+            // The receipt must name the route it paid for (#46) — clients
+            // reconcile the receipt against the endpoint they called.
+            route: route.path,
             status: payment.status,
             actualCost: costResult.actualCost,
             tokensUsed: totalTokens ?? null,
@@ -782,6 +785,8 @@ export class ProxyController {
           payerAddress: payment.payerAddress,
           amount: payment.amount?.toString(),
           asset: payment.asset,
+          // Populate the route so `X-Payment-Receipt` is self-describing (#46).
+          route: route.path,
           status: payment.status,
           actualCost: costResult.actualCost,
           tokensUsed: tokensUsed ?? null,
@@ -842,6 +847,14 @@ export class ProxyController {
       if (!res.headersSent) {
         res.setHeader('X-Actual-Cost', paid);
       }
+
+      // Escrow-funded draws must still be debited here. Returning without
+      // settling would let a caller with any escrow balance ≥ the quote make
+      // unlimited requests on flat-rate routes while the prepaid balance is
+      // never consumed. (Horizon-funded requests settle in the transfer
+      // itself and are skipped inside the helper.)
+      await this.settleEscrowDraw(payment, paid, '0', false, traceId);
+
       return {
         actualCost: paid,
         surplus: '0',
@@ -868,27 +881,13 @@ export class ProxyController {
       }
     }
 
-    // Record actual cost on the payment
+    // Record actual cost on the payment. On-chain settlement for escrow draws
+    // happens exactly once, below (`settleEscrowDraw`). Charging here as well
+    // would consume the contract's per-quote idempotency guard first and make
+    // the settlement charge fail — leaving the surplus refund permanently
+    // unexecuted and the caller overcharged.
     if (payment) {
       await this.paymentsService.recordActualCost(payment.quoteId, actualCost, tokensUsed);
-
-      // If this was a streaming request using escrow, we charge the exact amount now
-      const escrowPayer = payment.payerAddress;
-      if (payment.txHash && payment.txHash.startsWith('escrow:') && escrowPayer) {
-        const config = getConfig();
-        if (config.payment.contractAdminSecret) {
-          logger.info(`Charging exact streaming amount from escrow: ${actualCost}`);
-          await chargeEscrowOnChain({
-            contractId: config.contracts.creditEscrow,
-            rpcUrl: config.stellar.sorobanRpcUrl,
-            networkPassphrase: config.stellar.networkPassphrase,
-            adminSecret: config.payment.contractAdminSecret,
-            payer: escrowPayer,
-            amount: actualCost,
-            quoteId: payment.quoteId,
-          });
-        }
-      }
     }
 
     logger.info('Per-token cost calculated', {
@@ -930,36 +929,13 @@ export class ProxyController {
     // caller's credit-escrow balance. Best-effort (fire-and-forget) — the
     // LLM response has already been delivered; on-chain settlement must
     // never block it.
-    if (payment?.payerAddress) {
-      const config = getConfig();
-
-      // Operational signal (not an error): a per-token route is being served
-      // without on-chain settlement — actual usage is metered and debited
-      // locally, but never charged to the caller's escrow balance.
-      if (!config.payment.escrowSettlementEnabled) {
-        logger.warn('Per-token route used without escrow settlement enabled', {
-          traceId,
-          routeId: route.id,
-          providerId: route.providerId,
-          actualCost,
-          paidAmount: payment?.amount?.toString(),
-          hint: 'Set ESCROW_SETTLEMENT_ENABLED=true + CONTRACT_ADMIN_SECRET to charge actual usage on-chain',
-        });
-      }
-
-      settleEscrow({
-        enabled: config.payment.escrowSettlementEnabled,
-        contractId: config.contracts.creditEscrow,
-        rpcUrl: config.stellar.sorobanRpcUrl,
-        networkPassphrase: config.stellar.networkPassphrase,
-        adminSecret: config.payment.contractAdminSecret,
-        user: payment.payerAddress,
-        actualCost,
-        surplus: comparison.surplus,
-        isOverpaid: comparison.isOverpaid,
-        quoteId: payment.quoteId,
-      }).catch((err) => logger.error('Escrow settlement error', { traceId, error: String(err) }));
-    }
+    await this.settleEscrowDraw(
+      payment,
+      actualCost,
+      comparison.surplus,
+      comparison.isOverpaid,
+      traceId,
+    );
 
     return {
       actualCost,
@@ -967,5 +943,61 @@ export class ProxyController {
       isOverpaid: comparison.isOverpaid,
       isUnderpaid: comparison.isUnderpaid,
     };
+  }
+
+  /**
+   * Settle a metered response against the caller's prepaid escrow balance:
+   * charge the actual cost and refund any unused deposit.
+   *
+   * Only escrow draws (`X-Escrow-User`, recorded with a synthetic
+   * `escrow:<quoteId>` hash) touch the credit-escrow contract. A request paid
+   * per-request on-chain via Horizon has already settled in the payment
+   * transfer itself — debiting the same wallet's escrow balance on top would
+   * double-bill it, so those draws pass `enabled: false` and the settlement
+   * helper is a no-op.
+   *
+   * Idempotency: the contract's `charge` and `refund` are each guarded per
+   * `(user, quoteId)`, and this method is the single settlement call site, so
+   * a retried or duplicated settlement can never double-deduct.
+   *
+   * Fire-and-forget by design: the LLM response has already been delivered,
+   * so on-chain settlement must never block (or fail) it.
+   */
+  private async settleEscrowDraw(
+    payment: PaymentRecord | null,
+    actualCost: string,
+    surplus: string,
+    isOverpaid: boolean,
+    traceId: string,
+  ): Promise<void> {
+    if (!payment?.payerAddress) return;
+
+    const config = getConfig();
+    const isEscrowDraw = payment.txHash?.startsWith('escrow:') ?? false;
+
+    // Operational signal (not an error): an escrow-funded request is being
+    // served without on-chain settlement, so the prepaid balance is never
+    // consumed. This is a deliberate no-op until the flag is enabled.
+    if (isEscrowDraw && !config.payment.escrowSettlementEnabled) {
+      logger.warn('Escrow-funded request served without escrow settlement enabled', {
+        traceId,
+        quoteId: payment.quoteId,
+        actualCost,
+        hint: 'Set ESCROW_SETTLEMENT_ENABLED=true + CONTRACT_ADMIN_SECRET to charge actual usage on-chain',
+      });
+    }
+
+    settleEscrow({
+      enabled: config.payment.escrowSettlementEnabled && isEscrowDraw,
+      contractId: config.contracts.creditEscrow,
+      rpcUrl: config.stellar.sorobanRpcUrl,
+      networkPassphrase: config.stellar.networkPassphrase,
+      adminSecret: config.payment.contractAdminSecret,
+      user: payment.payerAddress,
+      actualCost,
+      surplus,
+      isOverpaid,
+      quoteId: payment.quoteId,
+    }).catch((err) => logger.error('Escrow settlement error', { traceId, error: String(err) }));
   }
 }

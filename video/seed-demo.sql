@@ -28,8 +28,6 @@ DELETE FROM "AuditLog" WHERE id LIKE 'demo-%' OR details->>'demo' = 'true';
 DELETE FROM "Notification" WHERE id LIKE 'demo-%';
 DELETE FROM "PayoutProposal";
 DELETE FROM "UnderpaymentDebt";
-DELETE FROM "PrepaidCredit";
-DELETE FROM "Wallet";
 
 -- ── Provider ────────────────────────────────────────────────────────
 UPDATE "Provider"
@@ -204,18 +202,9 @@ SELECT
   now() - ((g * 23) || ' minutes')::interval
 FROM generate_series(1, 14) AS g;
 
--- ── Prepaid credit (escrow view) ────────────────────────────────────
-INSERT INTO "Wallet" (id, address, label, "isProvider", "createdAt", "updatedAt")
-VALUES (gen_random_uuid(), 'GASW5TJM55OSITWKSSQTKOVLT523MV6ML7KDQBEOTREUARLW55UDBV7W',
-        'Nebula AI — prepaid', true, now(), now());
-
-INSERT INTO "PrepaidCredit" (id, "walletId", "providerId", balance, asset,
-                             "lastDepositTx", "lastDepositAt", "createdAt", "updatedAt")
-SELECT gen_random_uuid(), w.id, 'journey-provider', 840000000, 'USDC',
-       md5('demo-deposit-a') || md5('demo-deposit-b'), now() - interval '3 hours',
-       now(), now()
-FROM "Wallet" w
-WHERE w.address = 'GASW5TJM55OSITWKSSQTKOVLT523MV6ML7KDQBEOTREUARLW55UDBV7W';
+-- NOTE: the dashboard's escrow view reads live prepaid balances from the
+-- credit-escrow Soroban contract (`/api/v1/escrow/:address/balance`), not from
+-- a local table — there is no off-chain escrow balance to seed.
 
 -- ── One open underpayment debt (per-token debt ledger) ──────────────
 INSERT INTO "UnderpaymentDebt" (id, "providerId", "payerAddress", "quoteId", "routeId",

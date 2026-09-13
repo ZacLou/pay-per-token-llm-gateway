@@ -107,9 +107,11 @@ rejecting is sufficient to refuse access.
 
 - `Provider` (merchant + receiving wallet), `Route` (upstream URL, pricing),
   `Payment` (quote→hash lifecycle, single-use), `UnderpaymentDebt` (per-token
-  deficits), `PrepaidCredit` (v2), `Notification`, `AnalyticsEvent`,
-  `AuditLog`. Multi-tenant isolation: every provider-scoped query filters on
-  the authenticated wallet's `walletAddress`.
+  deficits), `PayoutProposal` (multisig payout state), `Notification`,
+  `AnalyticsEvent`, `AuditLog`. Prepaid escrow balances are **not** mirrored
+  in Postgres — they live on-chain in the credit-escrow contract and are read
+  via `getEscrowBalance()`. Multi-tenant isolation: every provider-scoped
+  query filters on the authenticated wallet's `walletAddress`.
 
 ### 5.2 Redis
 

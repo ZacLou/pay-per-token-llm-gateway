@@ -8,6 +8,17 @@ All notable changes to the x402 LLM Gateway project.
 
 ### Security
 
+- **SSRF redirect bypass closed.** The public-IP validation for webhook URLs
+  and upstream LLM URLs was performed on the _initial_ destination, but no
+  `fetch` in the repository set `redirect`, so undici's default behaviour
+  followed a `3xx` to internal infrastructure (e.g. `169.254.169.254`) after
+  the check had passed — and for routes the redirect body is returned to the
+  caller. Both proxy fetches and both webhook deliveries now use
+  `redirect: 'error'`.
+- **Webhook delivery timeout:** the plain `WebhookNotificationHandler.send()`
+  path had no `AbortSignal`, so a receiver that never responded could hold the
+  `/webhooks/test` request open unboundedly; both delivery paths now time out
+  after 10 s.
 - **Dependency advisories cleared and the scan is now a gate.** `js-yaml`
   4.3.1 → 5.4.1 and `smol-toml` 1.6.1 → 1.8.0 (new `pnpm-workspace.yaml`
   override floors); in `python/uv.lock` `urllib3` 2.6.3 → 2.7.0,
@@ -42,6 +53,41 @@ All notable changes to the x402 LLM Gateway project.
 
 ### Fixed
 
+- **Credit-escrow settlement now actually settles — exactly once.** Three
+  defects in the `#25` wiring meant the documented behaviour did not hold:
+  (1) an escrow draw was pre-charged by `chargeEscrowOnChain` before
+  `settleEscrow` ran, so the contract's per-quote idempotency guard made the
+  settlement charge fail and the **surplus was never refunded**;
+  (2) a flat-rate route settled through the escrow payment path was never
+  debited at all, giving a funded caller unlimited free requests;
+  (3) every metered Horizon payment was settled against the caller's escrow
+  balance too, double-billing wallets that held one. Escrow settlement is now
+  a single call site, applies to escrow-funded draws (`X-Escrow-User`) for
+  both flat-rate and per-token routes, and never touches escrow for a
+  Horizon-paid request. The e2e suite now asserts the balance is consumed
+  (previously it passed even when nothing was charged).
+- **Payout automation no longer re-proposes committed revenue.** Pending
+  payout revenue was computed as `confirmed − executed`, so an M-of-N proposal
+  awaiting signer approvals (threshold > 1) did not reserve its revenue and
+  the daily run minted a new proposal for the same money every day — two
+  approvals could have paid a provider twice. In-flight proposals
+  (`pending`/`proposed`/`approved`) now reserve revenue in both the cron and
+  the admin endpoint (`PAYOUT_RESERVING_STATUSES`).
+- **Prisma migration drift reconciled.** `schema.prisma` declared
+  `@@unique([txHash])`, but the migration created only a _partial_ unique
+  index, so `prisma migrate diff` reported permanent drift and `prisma db
+push` produced a different database than `prisma migrate deploy`. The
+  canonical full unique index now matches the declared schema; the single-use
+  guarantee is unchanged (verified against a real Postgres).
+- **`amountToScVal` now encodes the full i128 range.** It packed the whole
+  value into the low word and hardcoded `hi = 0`, so any amount ≥ 2^64 threw
+  or encoded incorrectly. The value is now split into low/high 64-bit words
+  with an explicit `i128` upper bound.
+- **`X-Payment-Receipt` now actually carries the route.** #46 populated the
+  route in the persisted `receiptJson`, but the returned header (and the
+  streaming `x402_receipt` event) omitted the field entirely — the acceptance
+  criterion required both. All receipt payloads now include `route`, with e2e
+  assertions.
 - **Paid retry now succeeds end to end.** `POST /api/v1/chat/completions` with a
   valid `X-Payment-Hash` previously returned `402 "Payment was made before the
 quote was issued"`. At retry time no `Payment` row carried the hash yet (the
@@ -81,6 +127,12 @@ quote was issued"`. At retry time no `Payment` row carried the hash yet (the
 
 ### Added
 
+- **`schema-drift` CI job:** applies the Prisma migration history to an empty
+  Postgres and runs `prisma migrate diff --exit-code`, so a declared-but-not-
+  materialised constraint can never silently diverge from the migrations
+  again. Also removed the `Wallet`/`PrepaidCredit` seeds from
+  `scripts/backup-restore-drill.sh` and `video/seed-demo.sql` (the models are
+  gone); the drill was re-run end to end and passes 14/14.
 - **Product pitch video** (`docs/media/x402-gateway-demo.mp4`, 1080p, ~5 min)
   with thumbnail, burned-in captions, an `.srt` and a synthesized voice-over,
   featured in the README. It

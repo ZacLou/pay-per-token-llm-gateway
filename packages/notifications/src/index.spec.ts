@@ -110,9 +110,28 @@ describe('WebhookNotificationHandler', () => {
 
     const handler = new WebhookNotificationHandler({ retryCount: 1 });
     await handler.sendWithSignature(payload, 'https://hooks.example.com/x402', 's');
+    await handler.send(payload, 'https://hooks.example.com/x402');
 
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.signal).toBeDefined();
+    // Both delivery paths must apply a timeout — an unbounded fetch to a
+    // receiver that never responds would hold the caller open indefinitely.
+    expect(fetchMock.mock.calls.length).toBe(2);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.signal).toBeDefined();
+    }
+  });
+
+  it('never follows redirects (a redirect would bypass the SSRF public-IP check)', async () => {
+    const fetchMock = okFetch();
+    mockFetch(fetchMock);
+
+    const handler = new WebhookNotificationHandler({ retryCount: 1 });
+    await handler.send(payload, 'https://hooks.example.com/x402');
+    await handler.sendWithSignature(payload, 'https://hooks.example.com/x402', 's');
+
+    expect(fetchMock.mock.calls.length).toBe(2);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.redirect).toBe('error');
+    }
   });
 });
 

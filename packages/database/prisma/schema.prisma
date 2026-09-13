@@ -24,7 +24,6 @@ model Provider {
   routes               Route[]
   payments             Payment[]
   notifications        Notification[]
-  prepaidCredits       PrepaidCredit[]
   underpaymentDebts    UnderpaymentDebt[]
   payoutProposals      PayoutProposal[]
 
@@ -86,21 +85,6 @@ model Payment {
   @@index([createdAt])
 }
 
-// ── Wallets ──────────────────────────────────
-
-model Wallet {
-  id          String   @id @default(uuid())
-  address     String   @unique
-  label       String?
-  isProvider  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  prepaidCredit PrepaidCredit?
-
-  @@index([address])
-}
-
 // ── Underpayment Debts (per-token enforcement) ─
 //
 // Records the deficit when a per-token request's actual cost (usage tokens ×
@@ -125,26 +109,6 @@ model UnderpaymentDebt {
 
   @@index([payerAddress, providerId, status])
   @@index([providerId, status])
-}
-
-// ── Prepaid Credits (v2) ─────────────────────
-
-model PrepaidCredit {
-  id             String   @id @default(uuid())
-  walletId       String   @unique
-  providerId     String
-  balance        BigInt    @default(0)
-  asset          String   @default("USDC")
-  lastDepositTx  String?
-  lastDepositAt  DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  wallet         Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  provider       Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-
-  @@index([walletId])
-  @@index([providerId])
 }
 
 // ── Payout Proposals (multisig automation) ───

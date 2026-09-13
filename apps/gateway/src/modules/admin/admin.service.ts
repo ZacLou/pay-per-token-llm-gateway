@@ -5,7 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Keypair } from '@stellar/stellar-sdk';
-import { prisma } from '@x402/database';
+import { PAYOUT_RESERVING_STATUSES, prisma } from '@x402/database';
 import { getConfig } from '@x402/config';
 import { logger } from '@x402/logger';
 import { approveMultisig, getMultisigConfig, proposeMultisig } from '../x402/multisig-client';
@@ -134,9 +134,13 @@ export class AdminService {
   /**
    * Confirmed revenue for a provider that has NOT yet been paid out.
    *
-   * Computed as: sum of confirmed `Payment.amount` − sum of amounts already
-   * covered by executed payout proposals. Wallet-scoped: the caller must own
-   * the provider (404 otherwise, so provider IDs can't be probed).
+   * Computed as: sum of confirmed `Payment.amount` − sum of amounts reserved
+   * by executed OR in-flight payout proposals. In-flight proposals must count:
+   * while an M-of-N payout awaits signer approvals its revenue is already
+   * committed, and ignoring it would let a second proposal be raised for the
+   * same revenue (both could reach quorum → double payout).
+   * Wallet-scoped: the caller must own the provider (404 otherwise, so
+   * provider IDs can't be probed).
    */
   async getPendingPayoutAmount(providerId: string, ownerAddress: string): Promise<bigint> {
     const provider = await prisma.provider.findFirst({
@@ -145,20 +149,20 @@ export class AdminService {
     });
     if (!provider) throw new NotFoundException(`Provider ${providerId} not found`);
 
-    const [revenue, paidOut] = await Promise.all([
+    const [revenue, reserved] = await Promise.all([
       prisma.payment.aggregate({
         where: { providerId, status: 'confirmed' },
         _sum: { amount: true },
       }),
       prisma.payoutProposal.aggregate({
-        where: { providerId, status: 'executed' },
+        where: { providerId, status: { in: [...PAYOUT_RESERVING_STATUSES] } },
         _sum: { amount: true },
       }),
     ]);
 
     const total = revenue._sum.amount ?? 0n;
-    const alreadyPaid = paidOut._sum.amount ?? 0n;
-    return total - alreadyPaid;
+    const alreadyReserved = reserved._sum.amount ?? 0n;
+    return total - alreadyReserved;
   }
 
   /**

@@ -547,3 +547,80 @@ runner's Node version cannot affect them. The only `steps.nvm.outputs.NODE_VERSI
 consumer in the file is the `sbom` job, which has its own copy of the step. Removed,
 with a comment recording why no Node setup belongs in this job so it is not
 re-added.
+
+---
+
+## 10. Addendum — 2026-09-13 clean-room verification pass
+
+Fourth review. This pass re-verified every closed issue against the actual
+implementation (not the docs), from a **clean clone** (no `node_modules`), and
+ran the full matrix against a **real PostgreSQL 16** while exercising the new
+migrations. Ten of the fourteen named issues were verified as genuinely and
+completely implemented (#26, #27, #28, #29, #31, #40, #41, #42, #43, #44, #45,
+#46, #47); the remaining two (#25 credit-escrow settlement, and the payout
+automation it feeds) contained **real accounting defects** that the existing
+tests did not catch. Those are now fixed and regression-tested.
+
+### 10.1 Defects found and fixed
+
+| #   | Defect                                                                                                                                                                                                                                                                                                                                       | Fix                                                                                                                                                                                                                                                               | Regression test                                                                                                                |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| C1  | **Escrow surplus never refunded.** A per-token escrow draw was pre-charged by `chargeEscrowOnChain`, then `settleEscrow` charged the same `(user, quoteId)` again. The contract panics `Quote already charged`, so the settlement charge failed and the refund was skipped — the caller's unused deposit stayed locked.                      | Removed the duplicate charge; a single settlement call site (`settleEscrow`) charges the actual cost and refunds the surplus.                                                                                                                                     | `escrow-flow.e2e-spec.ts` now asserts `settleEscrow` is called **once** with `enabled: true`, the actual cost and the surplus. |
+| C2  | **Flat-rate escrow draws were never debited.** `applyMeteredPricing` returned early for flat-rate routes, so a caller with any escrow balance ≥ the quote had unlimited free access and the prepaid balance was never consumed.                                                                                                              | Settlement now runs for flat-rate routes too.                                                                                                                                                                                                                     | New flat-rate assertion in `escrow-flow.e2e-spec.ts` (`actualCost` = flat price).                                              |
+| C3  | **Horizon payments were double-billed against escrow.** Settlement fired for every metered response, so a caller who paid per-request via Horizon was also charged from their escrow balance (or logged a spurious failure every request).                                                                                                   | Settlement is gated on escrow-funded draws (`txHash` starts with `escrow:`); Horizon payments pass `enabled: false`.                                                                                                                                              | Existing `x402-flow` settlement test asserts `enabled: false` for a Horizon payment.                                           |
+| C4  | **Payout automation could pay a provider twice.** Pending revenue was `confirmed − executed`, so an M-of-N proposal awaiting signer approval did not reserve its revenue; the daily cron proposed the same revenue again every day, and two approvals could both execute.                                                                    | Both the cron and the admin endpoint now reserve in-flight proposals (`pending`/`proposed`/`approved`/`executed`) via `PAYOUT_RESERVING_STATUSES`.                                                                                                                | New `payouts.service` + `admin.service` cases assert the reserving filter and that in-flight revenue yields no new proposal.   |
+| C5  | **Prisma schema drift.** `@@unique([txHash])` was declared but the migration created only a _partial_ unique index, so `prisma migrate diff` reported permanent drift and `prisma db push` (the documented quickstart) produced a different database than `prisma migrate deploy`.                                                           | New migration `20260913000001` replaces the partial index with the canonical full unique index. `migrate diff` is now **clean** against a real Postgres; the single-use constraint was verified to reject a duplicate hash while allowing multiple pending NULLs. | Manual Postgres verification (see §10.3).                                                                                      |
+| C6  | `amountToScVal` packed the whole value into the low 64-bit word with `hi = 0`, so any amount ≥ 2^64 threw or encoded incorrectly.                                                                                                                                                                                                            | Value is split into low/high 64-bit words with an explicit `i128` bound.                                                                                                                                                                                          | New `soroban-utils.spec.ts` (6 cases incl. 2^64 and `i128::MAX`).                                                              |
+| C7  | `.env.mainnet.example` began with a literal `[TEMPLATE]` line — docs tell users to copy this file.                                                                                                                                                                                                                                           | Removed.                                                                                                                                                                                                                                                          | —                                                                                                                              |     | C8  | `Wallet` and `PrepaidCredit` Prisma models were dead (no gateway/dashboard/SDK read or write; escrow balances are on-chain), contradicting the README schema table. | Removed both models + relations, with migration `20260913000000`; README/ARCHITECTURE corrected. | Full migration apply + `migrate diff` clean. |     | C9  | **#46 was only half done.** The issue requires the route in both the stored `receiptJson` **and the returned header**, but `X-Payment-Receipt` (and the streaming `x402_receipt` event) omitted the `route` field entirely — only `confirmPayment`'s persisted receipt carried it. | All three receipt payloads in the proxy now include `route: route.path`. | e2e asserts `receipt.route === '/v1/chat/completions'` (streaming + non-streaming). |
+| C10 | **SSRF guard bypassable via redirects.** No `fetch` in the repo set `redirect`, so undici's default `follow` let a webhook endpoint or an upstream LLM bounce the request to internal infrastructure (e.g. `169.254.169.254`) _after_ the public-IP validation passed. For routes the redirect target's body is even returned to the caller. | `redirect: 'error'` on both proxy fetches and both webhook deliveries.                                                                                                                                                                                            | `proxy.service.spec` + `notifications/index.spec` assert `redirect: 'error'`.                                                  |
+| C11 | The plain `WebhookNotificationHandler.send()` path had **no timeout** (only `sendWithSignature` did), so a receiver that never responds could hold the `/webhooks/test` request open indefinitely.                                                                                                                                           | Added `AbortSignal.timeout(10_000)` to both paths.                                                                                                                                                                                                                | notifications spec asserts a signal on every delivery call.                                                                    |
+| C12 | Removing the dead tables (C8) would have **broken the `backup-restore` CI job** — `scripts/backup-restore-drill.sh` and `video/seed-demo.sql` both seeded `Wallet`/`PrepaidCredit` rows. Found by scanning every reference to the removed models before finalising.                                                                          | Both seeds updated; the drill script was executed locally end-to-end to confirm it still passes.                                                                                                                                                                  | `bash scripts/backup-restore-drill.sh` → **14 passed, 0 failed**, 9 tables.                                                    |
+
+### 10.2 Verification evidence (this pass, clean clone)
+
+| Check                                                             | Result                                                                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `pnpm install --frozen-lockfile` (fresh clone, no `node_modules`) | ✅ 54 s                                                                                        |     | `nx run-many --target=test --all`                          | ✅ **438 tests / 28 suites** across 8 projects                                    |
+| `nx run-many --target=test:e2e --all`                             | ✅ **51 tests / 3 suites**                                                                     |
+| `nx run-many --target=lint --all` (15 projects)                   | ✅ 0 errors (17 warnings)                                                                      |
+| `nx run-many --target=build --all`                                | ✅ gateway (`tsc` + esbuild) + dashboard (`next build`)                                        |
+| `prisma migrate deploy` on a fresh PostgreSQL 16                  | ✅ all 9 migrations apply; 9 tables                                                            |     | `prisma migrate diff --from-url $DB --to-schema-datamodel` | ✅ **No difference detected** (was: `[+] Added unique index on columns (txHash)`) |
+| `bash scripts/backup-restore-drill.sh` (real containers)          | ✅ **14 passed, 0 failed** — dump/restore parity across all 9 tables                           |
+| New CI job `schema-drift`                                         | ✅ added — applies the migration history to an empty DB and fails on any `migrate diff` output |
+| DB single-use constraint (real Postgres)                          | ✅ second confirmed row with a duplicate `txHash` rejected by `Payment_txHash_key`             |
+| Secret scan (private keys / AWS / GitHub / `sk-`)                 | ✅ clean across `.ts/.json/.md/.yaml/.example`                                                 |
+| `pnpm audit`                                                      | ✅ 0 critical; 1 moderate + 2 high, all `image-size` (dev/build tooling, no patched release)   |
+| Tracked files / artifacts                                         | ✅ 0 `node_modules`/`dist`/`.next`/`coverage`/`.env` committed                                 |
+
+### 10.3 What could not be verified here
+
+- **Rust `cargo test` / gas benches** — no Rust toolchain in this environment.
+  The contract sources were reviewed statically: pagination clamping
+  (`MAX_PAGE_SIZE` + `saturating_add`), write-only `extend_ttl`,
+  admin-only mutators, and per-quote escrow idempotency are all present and
+  covered by in-tree tests. CI runs them.
+- **Live Stellar Testnet transaction** — no funded testnet keypair is available
+  to this environment. The retry path, replay rejection, and receipt handling
+  are covered by the e2e suite with mocked Horizon/Soroban; the previously
+  captured live transaction remains in `docs/evidence/`.
+- **Independent Soroban audit** — the mainnet gate, unchanged (§1, §5).
+
+### 10.4 Documentation inconsistencies corrected
+
+| Doc                             | Claim                                                                | Reality / fix                                                                                     |
+| ------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `README.md`                     | Schema table listed `Wallet` and `PrepaidCredit`                     | Models removed; table now lists `UnderpaymentDebt` / `PayoutProposal` and matches the schema.     |
+| `ARCHITECTURE.md` §5.1          | Listed `PrepaidCredit` (v2)                                          | Replaced with a note that escrow balances live on-chain and are read via `getEscrowBalance()`.    |
+| `MAINNET_READINESS.md` §2.2/§5  | Referred to escrow settlement as "open issue #25"                    | #25 is closed; the row now describes the escrow-draw-only semantics and the 2026-09-13 hardening. |
+| `.env.example` / `@x402/config` | Implied escrow settlement applied to all metered responses           | Clarified to escrow-funded (`X-Escrow-User`) draws only.                                          |
+| `AUDIT.md` §9.3                 | Stated the `[TEMPLATE]` line was a read annotation, not file content | It **was** real file content in `.env.mainnet.example`; removed.                                  |
+
+### 10.5 Verdict
+
+All fourteen named issues are implemented and now verified against the code,
+with the two that had real accounting defects fixed and regression-tested. The
+clean clone installs, builds, lints, and passes **438 unit + 51 e2e tests**; the
+migrations apply cleanly to an empty database and produce **zero schema drift**.
+Remaining blockers are unchanged and external: the **independent Soroban
+contract audit** (mainnet gate), a **live funded-testnet re-run**, and the
+**dev-tooling dependency advisories**.

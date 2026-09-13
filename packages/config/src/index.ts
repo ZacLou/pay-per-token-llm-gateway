@@ -117,9 +117,11 @@ export interface GatewayConfig {
      * Optional — if not set, on-chain recording is skipped. */
     contractAdminSecret?: string;
     /**
-     * Opt-in per-token on-chain settlement via the credit-escrow contract:
-     * after each metered LLM response the gateway charges the actual cost from
-     * the caller's escrow balance and auto-refunds any surplus. Requires
+     * Opt-in on-chain settlement via the credit-escrow contract for requests
+     * funded from a prepaid escrow balance (`X-Escrow-User`): the gateway
+     * charges the actual cost after the response and auto-refunds the unused
+     * deposit. Horizon-paid requests settle in the payment transfer itself and
+     * are never charged against escrow as well. Requires
      * `CONTRACT_ADMIN_SECRET` and an escrow contract funded by deposits.
      */
     escrowSettlementEnabled: boolean;

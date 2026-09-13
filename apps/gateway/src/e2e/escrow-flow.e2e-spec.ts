@@ -270,6 +270,20 @@ describe('x402 Gateway E2E — Escrow Flow', () => {
     expect(mockGetEscrowBalance).toHaveBeenCalledWith(
       expect.objectContaining({ user: ESCROW_USER }),
     );
+
+    // The prepaid balance must actually be consumed. Without this the suite
+    // would pass even if nothing were ever debited — i.e. unlimited free
+    // access for any caller holding an escrow balance ≥ the quote.
+    expect(mockSettleEscrow).toHaveBeenCalledTimes(1);
+    expect(mockSettleEscrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        user: ESCROW_USER,
+        actualCost: '1000000', // the flat price
+        surplus: '0',
+        isOverpaid: false,
+      }),
+    );
   });
 
   it('returns 402 when X-Escrow-User balance is insufficient', async () => {
@@ -300,6 +314,19 @@ describe('x402 Gateway E2E — Escrow Flow', () => {
     const receipt = JSON.parse(res.headers['x-payment-receipt']);
     expect(receipt.payerAddress).toBe(ESCROW_USER);
     expect(receipt.status).toBe('confirmed');
+    // #46: the returned header must name the route, not just the stored JSON.
+    expect(receipt.route).toBe('/v1/chat/completions');
+
+    // Metered escrow settlement: charged exactly once for the actual cost,
+    // with the unused deposit refunded (contract calls are idempotent per
+    // quote, so a duplicate settlement could never double-deduct).
+    expect(mockSettleEscrow).toHaveBeenCalledTimes(1);
+    const settle = mockSettleEscrow.mock.calls[0][0];
+    expect(settle.enabled).toBe(true);
+    expect(settle.user).toBe(ESCROW_USER);
+    expect(settle.actualCost).toBe('25000'); // 500 tokens × 50 stroops
+    expect(settle.surplus).toBe('179800'); // deposit 204800 − actual 25000
+    expect(settle.isOverpaid).toBe(true);
   });
 
   it('falls back to 402 when no payment or escrow header is provided', async () => {

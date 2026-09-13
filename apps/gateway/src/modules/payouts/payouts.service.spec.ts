@@ -2,6 +2,8 @@ import { Keypair } from '@stellar/stellar-sdk';
 import { PayoutsService } from './payouts.service';
 
 jest.mock('@x402/database', () => ({
+  // Mirrors the real export: executed AND in-flight proposals reserve revenue.
+  PAYOUT_RESERVING_STATUSES: ['pending', 'proposed', 'approved', 'executed'],
   prisma: {
     provider: {
       findMany: jest.fn(),
@@ -179,6 +181,35 @@ describe('PayoutsService', () => {
 
     expect(mockPrisma.payoutProposal.create).not.toHaveBeenCalled();
     expect(mockPropose).not.toHaveBeenCalled();
+  });
+
+  it('reserves in-flight proposals so the same revenue is never proposed twice', async () => {
+    // A 2-of-3 proposal for the whole 5,000,000 sits in `proposed` awaiting
+    // signer approval. The daily run must see it as already reserved and
+    // propose nothing — otherwise each run mints another proposal for the
+    // same revenue and two approvals could pay the provider twice.
+    mockPrisma.payoutProposal.aggregate.mockResolvedValue({ _sum: { amount: 5_000_000n } });
+
+    await service.handleDailyPayouts();
+
+    expect(mockPrisma.payoutProposal.aggregate).toHaveBeenCalledWith({
+      where: {
+        providerId: 'p-1',
+        status: { in: ['pending', 'proposed', 'approved', 'executed'] },
+      },
+      _sum: { amount: true },
+    });
+    expect(mockPrisma.payoutProposal.create).not.toHaveBeenCalled();
+    expect(mockPropose).not.toHaveBeenCalled();
+  });
+
+  it('only counts executed + in-flight proposals, not failed/cancelled ones', async () => {
+    await service.handleDailyPayouts();
+
+    const where = mockPrisma.payoutProposal.aggregate.mock.calls[0][0].where;
+    expect(where.status.in).toEqual(['pending', 'proposed', 'approved', 'executed']);
+    expect(where.status.in).not.toContain('failed');
+    expect(where.status.in).not.toContain('cancelled');
   });
 
   it('auto-approves a threshold-1 wallet and records the real signer address', async () => {

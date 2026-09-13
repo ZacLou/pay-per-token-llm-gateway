@@ -285,17 +285,16 @@ x402-llm-gateway/
 
 ### Database Schema
 
-| Model           | Purpose                                            |
-| --------------- | -------------------------------------------------- |
-| `Provider`      | LLM provider/merchant with Stellar wallet          |
-| `Route`         | Protected endpoint → upstream mapping with pricing |
-| `Payment`       | Payment records with on-chain verification data    |
-| `Wallet`        | Stellar wallet addresses                           |
-| `PrepaidCredit` | Escrow balances for credit-based billing (v2)      |
-
-| `Notification` | Persisted notification records (incl. durable in-app feed with read state) |
-| `AnalyticsEvent` | Request and payment events for analytics |
-| `AuditLog` | Immutable audit trail of all operations |
+| Model              | Purpose                                                     |
+| ------------------ | ----------------------------------------------------------- |
+| `Provider`         | LLM provider/merchant with Stellar wallet                   |
+| `Route`            | Protected endpoint → upstream mapping with pricing          |
+| `Payment`          | Payment records with on-chain verification data             |
+| `UnderpaymentDebt` | Open per-payer deficits from metered per-token underpayment |
+| `PayoutProposal`   | Multisig payout proposals and their approval state          |
+| `Notification`     | Persisted notification records (incl. durable in-app feed)  |
+| `AnalyticsEvent`   | Request and payment events for analytics                    |
+| `AuditLog`         | Immutable audit trail of all operations                     |
 
 ---
 

@@ -113,10 +113,6 @@ INSERT INTO "Route" (id, "providerId", path, "upstreamUrl", model, "pricingModel
 INSERT INTO "Payment" (id, "quoteId", "routeId", "providerId", "txHash", "payerAddress", amount, asset, status, ledger, "verifiedAt", "receiptJson", "createdAt", "updatedAt") VALUES
   ('pay-1', 'quote-1', 'route-1', 'prov-1', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5', 1000000, 'USDC', 'confirmed', 123456, NOW(), '{"quoteId":"quote-1"}'::jsonb, NOW(), NOW()),
   ('pay-2', 'quote-2', 'route-1', 'prov-1', NULL, NULL, 2000000, 'USDC', 'pending', NULL, NULL, NULL, NOW(), NOW());
-INSERT INTO "Wallet" (id, address, label, "isProvider", "createdAt", "updatedAt") VALUES
-  ('wallet-1', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5', 'drill', false, NOW(), NOW());
-INSERT INTO "PrepaidCredit" (id, "walletId", "providerId", balance, asset, "createdAt", "updatedAt") VALUES
-  ('credit-1', 'wallet-1', 'prov-1', 5000000, 'USDC', NOW(), NOW());
 INSERT INTO "UnderpaymentDebt" (id, "providerId", "payerAddress", "quoteId", "routeId", amount, status, "createdAt") VALUES
   ('debt-1', 'prov-1', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5', 'quote-debt-1', 'route-1', 4200, 'open', NOW());
 INSERT INTO "Notification" (id, "providerId", event, channel, payload, sent, "createdAt") VALUES

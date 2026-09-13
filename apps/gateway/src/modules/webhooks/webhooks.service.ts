@@ -93,9 +93,10 @@ export function signWebhookPayload(secret: string, payload: string): string {
  * the resolved hostname points to a public IP address — internal/private
  * infrastructure must never be reachable through the proxy.
  *
- * DNS resolution is performed at configuration time. Runtime re-validation
- * (at proxy time) would add per-request latency; the trust model assumes
- * only authenticated provider wallets can configure routes.
+ * DNS resolution is performed here at configuration time and re-checked at
+ * proxy time (`ProxyService.isUpstreamHostPublic`, 60 s cache) to catch DNS
+ * rebinding between save and send. Redirects are refused at proxy time, so a
+ * malicious upstream cannot bounce the request to an internal address.
  */
 export async function validateUpstreamUrl(url: string): Promise<string> {
   let parsed: URL;

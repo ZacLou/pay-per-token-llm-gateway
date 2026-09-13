@@ -344,6 +344,11 @@ export class ProxyService {
             },
             body: JSON.stringify(request),
             signal: AbortSignal.timeout(config.llm.requestTimeout),
+            // SSRF: the upstream host is validated as a public IP (at config
+            // time and again at proxy time). Following a redirect would let a
+            // malicious upstream bounce the request to internal
+            // infrastructure and return its response to the caller.
+            redirect: 'error',
           });
 
           if (!res.ok) {
@@ -438,6 +443,8 @@ export class ProxyService {
         },
         body: JSON.stringify({ ...request, stream: true }),
         signal: abortController.signal,
+        // Same SSRF rationale as forwardRequest — never follow a redirect.
+        redirect: 'error',
       });
     } catch (err) {
       await this.circuitBreaker.recordFailure(upstreamUrl);

@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
-import type { PrismaClient } from '@x402/database';
+import { PAYOUT_RESERVING_STATUSES, type PrismaClient } from '@x402/database';
 import { getConfig } from '@x402/config';
 import { proposeMultisig, approveMultisig, getMultisigConfig } from '../x402/multisig-client';
 
@@ -136,21 +136,25 @@ export class PayoutsService {
       return;
     }
 
-    // Aggregate confirmed revenue and already-executed payout amounts in parallel.
-    const [confirmedAggregate, executedAggregate] = await Promise.all([
+    // Aggregate confirmed revenue and already-reserved payout amounts in
+    // parallel. `alreadyReserved` covers executed proposals AND in-flight ones
+    // (pending/proposed/approved): an M-of-N proposal awaiting signer
+    // approvals must reserve its revenue, or the next daily run would propose
+    // the same revenue again and both proposals could pay out.
+    const [confirmedAggregate, reservedAggregate] = await Promise.all([
       this.prisma.payment.aggregate({
         where: { providerId, status: 'confirmed' },
         _sum: { amount: true },
       }),
       this.prisma.payoutProposal.aggregate({
-        where: { providerId, status: 'executed' },
+        where: { providerId, status: { in: [...PAYOUT_RESERVING_STATUSES] } },
         _sum: { amount: true },
       }),
     ]);
 
     const totalRevenue = confirmedAggregate._sum.amount ?? 0n;
-    const alreadyPaid = executedAggregate._sum.amount ?? 0n;
-    const pendingRevenue = totalRevenue - alreadyPaid;
+    const alreadyReserved = reservedAggregate._sum.amount ?? 0n;
+    const pendingRevenue = totalRevenue - alreadyReserved;
 
     if (pendingRevenue <= 0n) {
       return;
@@ -172,7 +176,7 @@ export class PayoutsService {
       {
         providerId,
         totalRevenue: totalRevenue.toString(),
-        alreadyPaid: alreadyPaid.toString(),
+        alreadyReserved: alreadyReserved.toString(),
         threshold,
       },
     );

@@ -8,6 +8,8 @@ import { AdminService } from './admin.service';
 import { loadConfig, setConfig } from '@x402/config';
 
 jest.mock('@x402/database', () => ({
+  // Mirrors the real export: executed AND in-flight proposals reserve revenue.
+  PAYOUT_RESERVING_STATUSES: ['pending', 'proposed', 'approved', 'executed'],
   prisma: {
     provider: {
       findMany: jest.fn(),
@@ -232,7 +234,7 @@ describe('AdminService', () => {
     const OWNER_PAYOUT = 'GA5ZSE6VKPVFLEXMWJQBGHE4FJHKQIFSJMLQ7H4VFQB4UHLEH5IOVK3F';
 
     describe('getPendingPayoutAmount', () => {
-      it('computes confirmed revenue minus executed payouts', async () => {
+      it('computes confirmed revenue minus executed and in-flight payouts', async () => {
         (mockPrisma.provider.findFirst as jest.Mock).mockResolvedValue({ id: 'provider-1' });
         (mockPrisma.payment.aggregate as jest.Mock).mockResolvedValue({
           _sum: { amount: 10_000_000n },
@@ -248,8 +250,14 @@ describe('AdminService', () => {
           where: { providerId: 'provider-1', status: 'confirmed' },
           _sum: { amount: true },
         });
+        // In-flight (pending/proposed/approved) proposals reserve revenue too:
+        // a second proposal must never be raised for revenue already committed
+        // to an M-of-N approval round.
         expect(mockPrisma.payoutProposal.aggregate).toHaveBeenCalledWith({
-          where: { providerId: 'provider-1', status: 'executed' },
+          where: {
+            providerId: 'provider-1',
+            status: { in: ['pending', 'proposed', 'approved', 'executed'] },
+          },
           _sum: { amount: true },
         });
       });

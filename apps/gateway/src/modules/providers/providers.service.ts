@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { prisma } from '@x402/database';
 import { logger } from '@x402/logger';
 import { StrKey } from '@stellar/stellar-sdk';
@@ -101,7 +106,9 @@ export class ProvidersService {
 
   async update(
     id: string,
-    data: Partial<Pick<Provider, 'name' | 'active' | 'webhookUrl' | 'webhookSecret'>> & { payoutWalletAddress?: string },
+    data: Partial<Pick<Provider, 'name' | 'active' | 'webhookUrl' | 'webhookSecret'>> & {
+      payoutWalletAddress?: string;
+    },
     ownerAddress: string,
   ): Promise<Provider> {
     // Ownership check first — only the wallet that owns this provider may edit it.
