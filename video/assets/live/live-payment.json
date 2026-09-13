@@ -1,0 +1,85 @@
+{
+  "runAt": "2026-09-13T08:12:17.690Z",
+  "network": "testnet",
+  "gateway": "http://127.0.0.1:3100",
+  "issuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+  "payer": "GB6T73H5IR53325U353MIFP5K4WZRGCPJVTSNJ7N2LX3DBHKQVXXTTZV",
+  "providerWallet": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+  "steps": {
+    "trustline": "57c7c450f6e9b82df358cb6dbf202f89aa48a2f4a0ad926bef5724efae5bd41d",
+    "mint": "403c12d3bc8d890d95b01fee68d05b1225f2315fcec863dae7e9a4eec3f49c24",
+    "quote": {
+      "id": "c727e2a9-6cd3-46a8-9f93-7e04eb8203b2",
+      "amount": "1000000",
+      "asset": "USDC",
+      "memo": "c727e2a96cd346a89f937e04",
+      "issuedAt": 1789287127,
+      "expiresAt": 1789287427
+    },
+    "payment": {
+      "txHash": "0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0",
+      "ledger": 4652709,
+      "amount": "0.1 USDC",
+      "to": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+      "horizon": "https://horizon-testnet.stellar.org/transactions/0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0"
+    },
+    "paidRetry": {
+      "status": 200,
+      "body": {
+        "args": {},
+        "data": "{\"model\":\"gpt-4-journey\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain x402 in one sentence.\"}]}",
+        "files": {},
+        "form": {},
+        "headers": {
+          "Accept": "*/*",
+          "Accept-Encoding": "br, gzip, deflate",
+          "Accept-Language": "*",
+          "Content-Length": "96",
+          "Content-Type": "application/json",
+          "Host": "httpbin.org",
+          "Sec-Fetch-Mode": "cors",
+          "Traceparent": "00-b3a7ebf18c3ef69c3a54cadcc95b185a-38f2e22d0af5e7ad-01",
+          "User-Agent": "node",
+          "X-Amzn-Trace-Id": "Root=1-6aa65ae0-6f151d077e8223b85db1898c",
+          "X-Request-Trace-Id": "b3a7ebf18c3ef69c3a54cadcc95b185a"
+        },
+        "json": {
+          "messages": [
+            {
+              "content": "Explain x402 in one sentence.",
+              "role": "user"
+            }
+          ],
+          "model": "gpt-4-journey"
+        },
+        "origin": "172.166.156.163",
+        "url": "https://httpbin.org/post"
+      },
+      "receipt": {
+        "id": "0b5526ca-4b7c-4f67-a910-0faa5088219d",
+        "quoteId": "c727e2a9-6cd3-46a8-9f93-7e04eb8203b2",
+        "txHash": "0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0",
+        "payerAddress": "GB6T73H5IR53325U353MIFP5K4WZRGCPJVTSNJ7N2LX3DBHKQVXXTTZV",
+        "amount": "1000000",
+        "asset": "USDC",
+        "status": "confirmed",
+        "actualCost": "1000000",
+        "tokensUsed": null
+      }
+    },
+    "replay": {
+      "status": 402,
+      "body": {
+        "status": 402,
+        "error": "Payment Required",
+        "message": "This payment has already been used. A new payment is required."
+      },
+      "receipt": null
+    },
+    "balances": {
+      "payerUsdc": "100.0000000",
+      "providerUsdc": "0.3000000"
+    }
+  }
+}

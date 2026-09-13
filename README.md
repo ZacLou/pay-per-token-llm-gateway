@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="#-demo"><strong>🎬 Demo</strong></a> ·
   <a href="#-architecture"><strong>Architecture</strong></a> ·
   <a href="#-quickstart"><strong>Quickstart</strong></a> ·
   <a href="#-api-reference"><strong>API</strong></a> ·
@@ -22,6 +23,11 @@
 </p>
 
 <p align="center">
+  <a href="docs/media/x402-gateway-demo.mp4"
+    ><img
+      src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Watch-5--minute_demo-22c55e"
+      alt="Watch the 5-minute product demo"
+  /></a>
   <img src="https://img.shields.io/badge/Stellar-Testnet-green" alt="Stellar Testnet" />
   <img src="https://img.shields.io/badge/NestJS-11.x-red" alt="NestJS" />
   <img src="https://img.shields.io/badge/Next.js-15.x-black" alt="Next.js" />
@@ -36,6 +42,57 @@
 > most critically an **independent contract audit** (the Soroban contracts
 > are self-tested; no external audit has been completed) and a fresh
 > **mainnet contract deployment**.
+
+---
+
+## 🎬 Demo
+
+<p align="center">
+  <a href="docs/media/x402-gateway-demo.mp4">
+    <img
+      src="docs/media/x402-gateway-demo-thumbnail.png"
+      alt="Watch the 5-minute x402 LLM Gateway product demo"
+      width="880"
+    />
+  </a>
+  <br />
+  <sub
+    >▶︎ <b>Watch the 5-minute product demo</b> — 1080p MP4 ·
+    <a href="docs/media/x402-gateway-demo.srt">captions (.srt)</a></sub
+  >
+</p>
+
+Five minutes, start to finish: the problem, the HTTP 402 protocol, a **real
+Stellar testnet payment** that returns a successful paid response, single-use
+replay enforcement, the provider dashboard, and the architecture behind it.
+
+| Timestamp | Chapter                     | What you see                                                                |
+| --------- | --------------------------- | --------------------------------------------------------------------------- |
+| `0:00`    | Cold open                   | Pay-per-request AI, settled on Stellar                                      |
+| `0:09`    | The problem                 | Keys, subscriptions and duplicated billing                                  |
+| `0:40`    | The protocol                | `402 Payment Required`, and a live quote response                           |
+| `1:11`    | How it works                | The five-step money path, animated                                          |
+| `1:52`    | **Live on Stellar testnet** | A real USDC payment, a paid `200` + receipt, then replay + forged rejection |
+| `2:41`    | The product                 | Provider dashboard: analytics, routes, payments, audit, webhooks, escrow    |
+| `3:26`    | Architecture & code         | Monorepo, three-layer replay protection, Soroban + TypeScript source        |
+| `4:07`    | Differentiation             | Why Stellar's cost and finality make sub-cent payments viable               |
+| `4:37`    | Engineering & audit status  | CI gates, security scans, and the honest mainnet gate                       |
+| `5:00`    | Close                       | Quickstart and repo                                                         |
+
+> **Everything on screen was captured from a running stack.** The dashboard
+> screenshots come from a live gateway with Postgres and Redis, and the
+> on-chain evidence is a real testnet transaction —
+> [`0d9f98e9…f2da18b0`](https://stellar.expert/explorer/testnet/tx/0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0),
+> ledger 4,652,709 — whose paid retry returned `HTTP 200` with a payment
+> receipt. Dashboard figures use a seeded demo dataset; see
+> [`video/README.md`](./video/README.md#provenance--what-is-real-and-what-is-demo-data)
+> for the full provenance table.
+
+<sub>
+Reproduce it, or record the narration: <a href="./video/README.md"><code>video/README.md</code></a> ·
+<code>node video/render.mjs</code> ·
+<code>node video/make-voiceover.mjs</code> (ElevenLabs / OpenAI / Cartesia / Gemini TTS)
+</sub>
 
 ---
 
@@ -252,7 +309,7 @@ x402-llm-gateway/
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway.git
+git clone https://github.com/mallonepay/pay-per-token-llm-gateway.git
 cd pay-per-token-llm-gateway
 
 pnpm install

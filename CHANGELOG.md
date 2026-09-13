@@ -4,7 +4,42 @@ All notable changes to the x402 LLM Gateway project.
 
 ---
 
-## [Unreleased] — 2026-09-12
+## [Unreleased] — 2026-09-13
+
+### Fixed
+
+- **Paid retry now succeeds end to end.** `POST /api/v1/chat/completions` with a
+  valid `X-Payment-Hash` previously returned `402 "Payment was made before the
+quote was issued"`. At retry time no `Payment` row carried the hash yet (the
+  quote's row was still `pending` with `txHash = NULL`), so verification minted
+  a **new** quote and validated the payment timestamp against it — always
+  rejecting a payment made before that new quote. The quote memo is a
+  deterministic function of the quote id, so the gateway now resolves the
+  originating quote from the transaction's on-chain memo
+  (`PaymentsService.findPendingByQuoteMemo` + `X402Service.fetchTransactionMemo`)
+  and binds the payment to the exact quote window it paid for. Payments with no
+  resolvable quote are still rejected by the fresh quote's `issuedAt` lower
+  bound — fail-closed. Covered by new unit tests (`quoteMemo` /
+  `quoteIdPrefixFromMemo`, `findPendingByQuoteMemo`) and two e2e cases;
+  `scripts/testnet-journey.sh` now passes its `HTTP 200` step.
+- **Video forged-hash demo:** the capture used a hardcoded `f`×64 hash, which
+  replay protection claimed on first sight, so later captures reported
+  "Payment already used" instead of the intended fail-closed
+  "Transaction not found on chain". Captures now use a random unseen hash.
+
+### Added
+
+- **Product pitch video** (`docs/media/x402-gateway-demo.mp4`, 1080p, ~5 min)
+  with thumbnail, burned-in captions and an `.srt`, featured in the README. It
+  is rendered from a deterministic stage fed by assets captured from a live
+  gateway + dashboard, and now shows the full paid flow: a real Stellar testnet
+  USDC payment, a `200` with payment receipt, then replay and forged-hash
+  rejection. Pipeline and provenance: `video/README.md`.
+- **Provider-agnostic narration:** `video/make-voiceover.mjs` synthesizes the
+  voice-over with ElevenLabs, OpenAI, Cartesia or Gemini (all normalized to
+  24 kHz mono) and muxes it onto the video.
+- **`pnpm video:check`** (and a `Video Narration Timing` CI job) fails the build
+  when any narration cue would overrun the scene budget it is spoken over.
 
 ### Security
 
@@ -155,7 +190,7 @@ All notable changes to the x402 LLM Gateway project.
 ### Known Limitations
 
 - Circuit breaker is in-memory only (not shared across gateway instances)
-- SDK unit tests remain at 0% coverage (targeted as [#45](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/45))
-- Escrow settlement is partially wired (credit-escrow contract exists but gateway settlement path is incomplete — [#25](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/25))
-- Streaming receipt headers are not yet set (`X-Payment-Receipt` empty on SSE — [#29](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/29))
-- API key / session tables in Prisma schema are dead code — [#47](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/47)
+- SDK unit tests remain at 0% coverage (targeted as [#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45))
+- Escrow settlement is partially wired (credit-escrow contract exists but gateway settlement path is incomplete — [#25](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/25))
+- Streaming receipt headers are not yet set (`X-Payment-Receipt` empty on SSE — [#29](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/29))
+- API key / session tables in Prisma schema are dead code — [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47)

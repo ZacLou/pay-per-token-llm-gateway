@@ -1,0 +1,258 @@
+{
+  "title": "x402 LLM Gateway — pay-per-request AI, settled on Stellar",
+  "description": "Product pitch for x402 LLM Gateway: HTTP 402 stablecoin micropayments for LLM APIs on Stellar.",
+  "voice": {
+    "provider": "elevenlabs",
+    "sampleRate": 24000,
+    "style": "Read the following product-demo narration as a confident technical founder: warm, clear and unhurried. Keep an even pace, put slight emphasis on product claims, and stay measured on risk and limitations. Do not oversell.",
+    "providers": {
+      "elevenlabs": {
+        "voiceId": "pNInz6obpgDQGcFmaJgB",
+        "modelId": "eleven_multilingual_v2"
+      },
+      "openai": {
+        "voice": "onyx",
+        "model": "gpt-4o-mini-tts"
+      },
+      "cartesia": {
+        "modelId": "sonic-2",
+        "voiceId": null
+      },
+      "gemini": {
+        "endpoint": "https://generativelanguage.googleapis.com/v1beta/interactions",
+        "model": "gemini-3.1-flash-tts-preview",
+        "fallbackModel": "gemini-2.5-flash-preview-tts",
+        "voiceName": "Kore"
+      }
+    }
+  },
+  "scenes": [
+    {
+      "id": "open",
+      "duration": 9,
+      "fill": true,
+      "title": "Cold open",
+      "cues": [
+        {
+          "at": 0.8,
+          "text": "Every AI product eventually hits the same wall: <b>API keys, quotas, and invoices.</b>"
+        }
+      ]
+    },
+    {
+      "id": "problem",
+      "duration": 31,
+      "title": "The problem",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "Today, access to a model is gated by <b>billing infrastructure</b>, not by the model."
+        },
+        {
+          "at": 7.4,
+          "text": "An account, an API key, a quota. <b>An autonomous agent cannot sign up for a card.</b>"
+        },
+        {
+          "at": 15.4,
+          "text": "Traffic is bursty, but the bill is a <b>flat subscription</b> — you pay for capacity you never use."
+        },
+        {
+          "at": 23.4,
+          "text": "And every team rebuilds metering, invoicing and dunning from scratch."
+        }
+      ]
+    },
+    {
+      "id": "protocol",
+      "duration": 31,
+      "title": "HTTP 402",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "The fix is already in the HTTP spec — <b>unused since 1997</b>."
+        },
+        {
+          "at": 7.6,
+          "text": "<b>402 Payment Required</b> — a status code reserved for exactly this."
+        },
+        {
+          "at": 15.0,
+          "text": "x402 makes it real: the server returns a quote, the client pays, then retries with proof."
+        },
+        {
+          "at": 24.4,
+          "text": "No signup. No subscription. <b>No API key.</b> Just a wallet and a per-request price."
+        }
+      ]
+    },
+    {
+      "id": "flow",
+      "duration": 41,
+      "title": "How it works",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "Here is the whole money path. The gateway is a reverse proxy, OpenAI-compatible."
+        },
+        {
+          "at": 7.6,
+          "text": "One: the caller sends a chat request. With no payment, the gateway answers <b>402</b> with a quote."
+        },
+        {
+          "at": 16.0,
+          "text": "Two: the client pays the quoted amount in USDC on Stellar — typically in about five seconds."
+        },
+        {
+          "at": 23.6,
+          "text": "Three: the gateway verifies the transaction against Horizon and the Soroban contracts, then atomically claims the hash."
+        },
+        {
+          "at": 31.4,
+          "text": "Four: the request is forwarded upstream and the caller receives the model response plus a <b>payment receipt</b>."
+        }
+      ]
+    },
+    {
+      "id": "live",
+      "duration": 49,
+      "title": "Live on testnet",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "This is not a mock-up. These are live responses from the gateway running against <b>Stellar testnet</b>."
+        },
+        {
+          "at": 13.4,
+          "text": "An unpaid request returns a real quote: amount, asset, issuer, destination and an expiry window."
+        },
+        {
+          "at": 21.6,
+          "text": "The client pays one tenth of a USDC — confirmed on-chain, and public on Stellar Expert."
+        },
+        {
+          "at": 30.6,
+          "text": "Retry with that hash: <b>HTTP 200</b>, the model response, and a payment receipt."
+        },
+        {
+          "at": 39.2,
+          "text": "Pay once, spend once — replaying the hash is refused. A forged hash is refused too: the gateway <b>fails closed</b>, never open."
+        }
+      ]
+    },
+    {
+      "id": "product",
+      "duration": 45,
+      "title": "The product",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "Providers get a real operational surface, not just a proxy."
+        },
+        {
+          "at": 7.0,
+          "text": "Revenue, paid versus unpaid requests, and latency — with a live time-series."
+        },
+        {
+          "at": 14.0,
+          "text": "Routes carry their own upstream, model and pricing: flat-rate or <b>per token</b>."
+        },
+        {
+          "at": 22.0,
+          "text": "Every payment is recorded with its transaction hash, payer and ledger."
+        },
+        {
+          "at": 30.0,
+          "text": "Audit trail, wallet-authenticated sessions, webhooks and a persisted notification feed."
+        },
+        {
+          "at": 38.0,
+          "text": "And escrow balances for prepaid credit."
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "duration": 41,
+      "title": "Architecture",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "Under the hood: a Nx monorepo with a NestJS gateway, a Next.js dashboard, and fifteen shared packages."
+        },
+        {
+          "at": 9.0,
+          "text": "Replay protection is layered three deep — Redis for speed, Postgres as the authority, Soroban as permanent on-chain proof."
+        },
+        {
+          "at": 19.0,
+          "text": "On-chain, the verifier contract stores each used hash as its own ledger entry, so gas stays flat as history grows."
+        },
+        {
+          "at": 29.0,
+          "text": "And payments are bound to a quote window, which is what stops an old transaction being replayed for free access."
+        }
+      ]
+    },
+    {
+      "id": "why",
+      "duration": 30,
+      "title": "Differentiation",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "Why Stellar? Because the economics only work when settlement costs almost nothing."
+        },
+        {
+          "at": 8.4,
+          "text": "Fees around <b>one hundred-thousandth of a dollar</b>, five-second finality, native USDC, and Soroban for verification."
+        },
+        {
+          "at": 17.0,
+          "text": "That makes a tenth-of-a-cent payment viable — which is the whole point."
+        },
+        {
+          "at": 24.4,
+          "text": "API keys require trust. Subscriptions require commitment. <b>This requires neither.</b>"
+        }
+      ]
+    },
+    {
+      "id": "quality",
+      "duration": 23,
+      "title": "Engineering",
+      "cues": [
+        {
+          "at": 0.4,
+          "text": "This is engineered like infrastructure: lint, unit tests, an end-to-end suite, contract tests and a size gate."
+        },
+        {
+          "at": 8.4,
+          "text": "Plus gitleaks, Trivy, OSV scanning and a ZAP baseline scan on every push."
+        },
+        {
+          "at": 15.4,
+          "text": "The contracts are self-tested and live on testnet. An <b>independent audit</b> is the gate to mainnet."
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "duration": 17,
+      "title": "Close",
+      "cues": [
+        {
+          "at": 0.6,
+          "text": "x402 LLM Gateway. <b>Pay per request. Settle on Stellar.</b>"
+        },
+        {
+          "at": 7.0,
+          "text": "Clone it, run the quickstart, send your first unpaid request."
+        },
+        {
+          "at": 12.4,
+          "text": "MIT licensed. Built in the open."
+        }
+      ]
+    }
+  ]
+}

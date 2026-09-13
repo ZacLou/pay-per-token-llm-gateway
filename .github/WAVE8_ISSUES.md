@@ -7,7 +7,7 @@
 
 ## Issue 1: Wire Credit Escrow Settlement in the Gateway
 
-**GitHub:** [#25](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/25) · **Status:** ✅ implemented — gateway settlement wiring, disabled-warning, unit + e2e tests (2026-09-09)
+**GitHub:** [#25](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/25) · **Status:** ✅ implemented — gateway settlement wiring, disabled-warning, unit + e2e tests (2026-09-09)
 
 **Title:** `feat: wire credit-escrow settlement for metered per-token pricing`
 
@@ -50,7 +50,7 @@ Per-token pricing detects underpayment (`applyMeteredPricing` logs `isUnderpaid`
 
 ## Issue 2: Implement SDK External Signer (`signTransaction` callback)
 
-**GitHub:** [#26](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/26) · **Status:** ✅ implemented — external signer path + error-path tests (2026-09-09)
+**GitHub:** [#26](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/26) · **Status:** ✅ implemented — external signer path + error-path tests (2026-09-09)
 
 **Title:** `fix: implement external signer path in SDK executePayment`
 
@@ -102,7 +102,7 @@ The README and `@x402/types` advertise "Stellar wallet integration (secret key o
 
 ## Issue 3: Clamp Unbounded Pagination Limits in Soroban Contracts
 
-**GitHub:** [#27](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/27) · **Status:** ✅ implemented — MAX_PAGE_SIZE clamp + saturating_add in all three contracts, clamp/overflow tests + property tests + gas benches (2026-09-09)
+**GitHub:** [#27](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/27) · **Status:** ✅ implemented — MAX_PAGE_SIZE clamp + saturating_add in all three contracts, clamp/overflow tests + property tests + gas benches (2026-09-09)
 
 **Title:** `fix(contracts): clamp unbounded limit in paginated queries to prevent gas DoS`
 
@@ -149,7 +149,7 @@ A caller can pass `limit = u32::MAX` and `offset = 0` — the loop iterates up t
 
 ## Issue 4: Remove `extend_ttl` from Read-Only Soroban Contract Functions
 
-**GitHub:** [#28](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/28) · **Status:** open
+**GitHub:** [#28](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/28) · **Status:** open
 
 **Title:** `perf(contracts): remove extend_ttl from read-only functions to reduce unnecessary gas costs`
 
@@ -190,7 +190,7 @@ Every public function in all three contracts calls `extend_ttl()`, including rea
 
 ## Issue 5: Add Payment Receipt Headers to Streaming (SSE) Responses
 
-**GitHub:** [#29](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/29) · **Status:** open
+**GitHub:** [#29](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/29) · **Status:** open
 
 **Title:** `fix: set X-Payment-Receipt headers on streaming responses`
 
@@ -228,7 +228,7 @@ Non-streaming responses include `X-Payment-Receipt`, `X-Actual-Cost`, and `X-Sur
 
 ## Issue 6: Add DNS Rebinding Protection at Proxy-Forward Time
 
-**GitHub:** [#30](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/30) · **Status:** ✅ closed — implemented in `813fed7`
+**GitHub:** [#30](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/30) · **Status:** ✅ closed — implemented in `813fed7`
 
 **Title:** `fix: re-validate upstream DNS at request time to prevent DNS rebinding SSRF`
 
@@ -267,7 +267,7 @@ Non-streaming responses include `X-Payment-Receipt`, `X-Actual-Cost`, and `X-Sur
 
 ## Issue 7: Enforce `minPaymentAmount` in Quote Generation and Payment Verification
 
-**GitHub:** [#31](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/31) · **Status:** open
+**GitHub:** [#31](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/31) · **Status:** open
 
 **Title:** `fix: enforce minPaymentAmount config in quote generation and payment verification`
 
@@ -305,7 +305,7 @@ Non-streaming responses include `X-Payment-Receipt`, `X-Actual-Cost`, and `X-Sur
 
 ## Issue 8: Add Unit Tests for Next.js Dashboard
 
-**GitHub:** [#32](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/32) · **Status:** ✅ closed — initial scaffolding in `05e10c9` (page-level tests + CI step remain as follow-up)
+**GitHub:** [#32](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/32) · **Status:** ✅ closed — initial scaffolding in `05e10c9` (page-level tests + CI step remain as follow-up)
 
 **Title:** `test: add Jest unit tests for dashboard pages and components`
 
@@ -350,7 +350,7 @@ The Next.js dashboard has **zero unit tests**. The `apps/dashboard/project.json`
 
 ## Issue 9: Wire Email Notification Channel
 
-**GitHub:** [#33](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/33) · **Status:** ✅ closed — implemented in `09e4706` (dispatcher registration remains as follow-up in #43 scope)
+**GitHub:** [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) · **Status:** ✅ closed — implemented in `09e4706` (dispatcher registration remains as follow-up in #43 scope)
 
 **Title:** `feat: implement email notification channel with nodemailer`
 
@@ -391,7 +391,7 @@ The Next.js dashboard has **zero unit tests**. The `apps/dashboard/project.json`
 
 ## Issue 10: Add Escrow Accounting Invariant Tests
 
-**GitHub:** [#34](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/34) · **Status:** ✅ closed — implemented in `b49a2d1`
+**GitHub:** [#34](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/34) · **Status:** ✅ closed — implemented in `b49a2d1`
 
 **Title:** `test(contracts): add invariant tests for credit-escrow token balance equation`
 
@@ -428,7 +428,7 @@ The credit-escrow contract's test suite covers happy-path deposit/charge/refund/
 
 ## Issue 11: Automate Provider Payouts via the Multisig Soroban Contract
 
-**GitHub:** [#40](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/40) · **Status:** ✅ implemented — multisig-client, PayoutProposal model/migration, payout service + admin endpoints, threshold-1 auto-approve, unit tests (2026-09-09)
+**GitHub:** [#40](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/40) · **Status:** ✅ implemented — multisig-client, PayoutProposal model/migration, payout service + admin endpoints, threshold-1 auto-approve, unit tests (2026-09-09)
 
 **Title:** `feat: automate provider payouts via the multisig Soroban contract`
 
@@ -471,7 +471,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 12: Require Explicit `TRUST_PROXY` and Add Wallet-Based Rate Limiting for the Paid Tier
 
-**GitHub:** [#41](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/41) · **Status:** open
+**GitHub:** [#41](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/41) · **Status:** open
 
 **Title:** `fix: require explicit TRUST_PROXY and add wallet-based rate limiting for the paid tier`
 
@@ -510,7 +510,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 13: Validate Payout Wallets and Add an Optional Provider Approval Flow
 
-**GitHub:** [#42](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/42) · **Status:** open
+**GitHub:** [#42](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/42) · **Status:** open
 
 **Title:** `feat: validate payout wallets and add an optional provider approval flow`
 
@@ -552,7 +552,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 14: Persist In-App Notifications in Postgres (Durable, Cross-Instance)
 
-**GitHub:** [#43](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/43) · **Status:** open
+**GitHub:** [#43](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/43) · **Status:** open
 
 **Title:** `feat: persist in-app notifications in Postgres (durable, cross-instance)`
 
@@ -594,7 +594,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 15: Move Analytics Time-Series Bucketing from JS to SQL
 
-**GitHub:** [#44](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/44) · **Status:** open
+**GitHub:** [#44](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/44) · **Status:** open
 
 **Title:** `perf: move analytics time-series bucketing from JS to SQL`
 
@@ -631,7 +631,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 16: Add Unit Tests for `@x402/sdk` (call, streaming, signer paths)
 
-**GitHub:** [#45](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/45) · **Status:** ✅ implemented — SDK unit suite (19 tests, 89.9% stmts) covering call/stream/signer paths + error paths, threshold enforced in CI (2026-09-09)
+**GitHub:** [#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45) · **Status:** ✅ implemented — SDK unit suite (19 tests, 89.9% stmts) covering call/stream/signer paths + error paths, threshold enforced in CI (2026-09-09)
 
 **Title:** `test: add unit tests for @x402/sdk (call, streaming, signer paths)`
 
@@ -674,7 +674,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 17: Populate Route in Payment Receipts
 
-**GitHub:** [#46](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/46) · **Status:** open
+**GitHub:** [#46](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/46) · **Status:** open
 
 **Title:** `fix: populate route in payment receipts (X-Payment-Receipt shows empty route)`
 
@@ -711,7 +711,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 18: Remove Unused `Session` and `ApiKey` Prisma Models
 
-**GitHub:** [#47](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/issues/47) · **Status:** open
+**GitHub:** [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47) · **Status:** open
 
 **Title:** `chore: remove unused Session and ApiKey Prisma models`
 

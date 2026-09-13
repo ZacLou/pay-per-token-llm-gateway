@@ -356,8 +356,8 @@ lsof -ti:3000 | xargs kill -9  # if the dev server is still running
 ## Getting Help
 
 - **Issue comments** — Ask questions on the specific issue you're working on.
-- **Discussions** — For broader questions, open a [GitHub Discussion](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/discussions).
-- **Security vulnerabilities** — Do NOT open a public issue. [Report privately](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/security/advisories/new).
+- **Discussions** — For broader questions, open a [GitHub Discussion](https://github.com/mallonepay/pay-per-token-llm-gateway/discussions).
+- **Security vulnerabilities** — Do NOT open a public issue. [Report privately](https://github.com/mallonepay/pay-per-token-llm-gateway/security/advisories/new).
 
 ---
 

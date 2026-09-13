@@ -1,0 +1,155 @@
+1
+00:00:00,800 --> 00:00:08,850
+Every AI product eventually hits the same wall: API keys, quotas, and invoices.
+
+2
+00:00:09,400 --> 00:00:16,400
+Today, access to a model is gated by billing infrastructure, not by the model.
+
+3
+00:00:16,400 --> 00:00:24,400
+An account, an API key, a quota. An autonomous agent cannot sign up for a card.
+
+4
+00:00:24,400 --> 00:00:32,400
+Traffic is bursty, but the bill is a flat subscription — you pay for capacity you never use.
+
+5
+00:00:32,400 --> 00:00:39,850
+And every team rebuilds metering, invoicing and dunning from scratch.
+
+6
+00:00:40,400 --> 00:00:47,600
+The fix is already in the HTTP spec — unused since 1997.
+
+7
+00:00:47,600 --> 00:00:55,000
+402 Payment Required — a status code reserved for exactly this.
+
+8
+00:00:55,000 --> 00:01:04,400
+x402 makes it real: the server returns a quote, the client pays, then retries with proof.
+
+9
+00:01:04,400 --> 00:01:10,850
+No signup. No subscription. No API key. Just a wallet and a per-request price.
+
+10
+00:01:11,400 --> 00:01:18,600
+Here is the whole money path. The gateway is a reverse proxy, OpenAI-compatible.
+
+11
+00:01:18,600 --> 00:01:27,000
+One: the caller sends a chat request. With no payment, the gateway answers 402 with a quote.
+
+12
+00:01:27,000 --> 00:01:34,600
+Two: the client pays the quoted amount in USDC on Stellar — typically in about five seconds.
+
+13
+00:01:34,600 --> 00:01:42,400
+Three: the gateway verifies the transaction against Horizon and the Soroban contracts, then atomically claims the hash.
+
+14
+00:01:42,400 --> 00:01:51,850
+Four: the request is forwarded upstream and the caller receives the model response plus a payment receipt.
+
+15
+00:01:52,400 --> 00:02:05,400
+This is not a mock-up. These are live responses from the gateway running against Stellar testnet.
+
+16
+00:02:05,400 --> 00:02:13,600
+An unpaid request returns a real quote: amount, asset, issuer, destination and an expiry window.
+
+17
+00:02:13,600 --> 00:02:22,600
+The client pays one tenth of a USDC — confirmed on-chain, and public on Stellar Expert.
+
+18
+00:02:22,600 --> 00:02:31,200
+Retry with that hash: HTTP 200, the model response, and a payment receipt.
+
+19
+00:02:31,200 --> 00:02:40,850
+Pay once, spend once — replaying the hash is refused. A forged hash is refused too: the gateway fails closed, never open.
+
+20
+00:02:41,400 --> 00:02:48,000
+Providers get a real operational surface, not just a proxy.
+
+21
+00:02:48,000 --> 00:02:55,000
+Revenue, paid versus unpaid requests, and latency — with a live time-series.
+
+22
+00:02:55,000 --> 00:03:03,000
+Routes carry their own upstream, model and pricing: flat-rate or per token.
+
+23
+00:03:03,000 --> 00:03:11,000
+Every payment is recorded with its transaction hash, payer and ledger.
+
+24
+00:03:11,000 --> 00:03:19,000
+Audit trail, wallet-authenticated sessions, webhooks and a persisted notification feed.
+
+25
+00:03:19,000 --> 00:03:25,850
+And escrow balances for prepaid credit.
+
+26
+00:03:26,400 --> 00:03:35,000
+Under the hood: a Nx monorepo with a NestJS gateway, a Next.js dashboard, and fifteen shared packages.
+
+27
+00:03:35,000 --> 00:03:45,000
+Replay protection is layered three deep — Redis for speed, Postgres as the authority, Soroban as permanent on-chain proof.
+
+28
+00:03:45,000 --> 00:03:55,000
+On-chain, the verifier contract stores each used hash as its own ledger entry, so gas stays flat as history grows.
+
+29
+00:03:55,000 --> 00:04:06,850
+And payments are bound to a quote window, which is what stops an old transaction being replayed for free access.
+
+30
+00:04:07,400 --> 00:04:15,400
+Why Stellar? Because the economics only work when settlement costs almost nothing.
+
+31
+00:04:15,400 --> 00:04:24,000
+Fees around one hundred-thousandth of a dollar, five-second finality, native USDC, and Soroban for verification.
+
+32
+00:04:24,000 --> 00:04:31,400
+That makes a tenth-of-a-cent payment viable — which is the whole point.
+
+33
+00:04:31,400 --> 00:04:36,850
+API keys require trust. Subscriptions require commitment. This requires neither.
+
+34
+00:04:37,400 --> 00:04:45,400
+This is engineered like infrastructure: lint, unit tests, an end-to-end suite, contract tests and a size gate.
+
+35
+00:04:45,400 --> 00:04:52,400
+Plus gitleaks, Trivy, OSV scanning and a ZAP baseline scan on every push.
+
+36
+00:04:52,400 --> 00:04:59,850
+The contracts are self-tested and live on testnet. An independent audit is the gate to mainnet.
+
+37
+00:05:00,600 --> 00:05:07,000
+x402 LLM Gateway. Pay per request. Settle on Stellar.
+
+38
+00:05:07,000 --> 00:05:12,400
+Clone it, run the quickstart, send your first unpaid request.
+
+39
+00:05:12,400 --> 00:05:16,850
+MIT licensed. Built in the open.

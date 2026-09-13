@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "status": "ready",
+    "service": "x402-gateway",
+    "version": "0.1.0",
+    "timestamp": "2026-09-13T08:35:33.445Z",
+    "uptime": 1605.091681018,
+    "environment": "development",
+    "network": "testnet",
+    "checks": {
+      "database": {
+        "status": "ok",
+        "latencyMs": 1
+      },
+      "redis": {
+        "status": "ok",
+        "latencyMs": 1
+      }
+    }
+  }
+}

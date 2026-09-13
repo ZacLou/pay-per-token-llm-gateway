@@ -1,0 +1,8 @@
+{
+  "status": 402,
+  "body": {
+    "status": 402,
+    "error": "Payment Required",
+    "message": "Payment verification failed: Transaction not found on chain"
+  }
+}

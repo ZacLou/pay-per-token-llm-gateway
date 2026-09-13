@@ -33,9 +33,9 @@ langchain = ["langchain-core>=0.1"]
 test = ["pytest>=7"]
 
 [project.urls]
-Homepage = "https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway"
-Documentation = "https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/tree/main/python"
-Source = "https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway"
+Homepage = "https://github.com/mallonepay/pay-per-token-llm-gateway"
+Documentation = "https://github.com/mallonepay/pay-per-token-llm-gateway/tree/main/python"
+Source = "https://github.com/mallonepay/pay-per-token-llm-gateway"
 
 [tool.hatch.build.targets.wheel]
 packages = ["x402_sdk"]

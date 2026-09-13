@@ -29,6 +29,7 @@
     "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
     "vercel:check": "bash scripts/vercel-deploy-check.sh",
+    "video:check": "node video/make-voiceover.mjs --check",
     "clean": "nx reset && rm -rf node_modules dist .nx",
     "prepare": "husky"
   },

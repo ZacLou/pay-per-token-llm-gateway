@@ -1,0 +1,8 @@
+{
+  "status": 402,
+  "body": {
+    "status": 402,
+    "error": "Payment Required",
+    "message": "This payment has already been used. A new payment is required."
+  }
+}

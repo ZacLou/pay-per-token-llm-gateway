@@ -1,0 +1,119 @@
+{
+  "openapi": "0.1.0",
+  "title": "x402 LLM Gateway",
+  "endpointCount": 45,
+  "pathCount": 31,
+  "tags": [
+    "health",
+    "metrics",
+    "x402",
+    "escrow",
+    "routes",
+    "auth",
+    "payments",
+    "analytics",
+    "proxy",
+    "providers",
+    "admin",
+    "webhooks",
+    "notifications"
+  ],
+  "sample": [
+    {
+      "method": "POST",
+      "path": "/api/v1/x402/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/x402/status/{quoteId}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/escrow/{address}/balance"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/routes"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/routes"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/routes/{id}"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/routes/{id}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/routes/{id}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/challenge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/session"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auth/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/payments"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/payments/{quoteId}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/analytics/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/analytics/timeseries"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/analytics/events"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/chat/completions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/completions"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/chat/completions"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/chat/completions"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/chat/completions"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/v1/chat/completions"
+    },
+    {
+      "method": "HEAD",
+      "path": "/api/v1/chat/completions"
+    }
+  ]
+}

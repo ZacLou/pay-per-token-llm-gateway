@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-13T08:36:43.458Z",
+  "gateway": "http://127.0.0.1:3100",
+  "dashboard": "http://localhost:3001",
+  "wallet": "GCVAEMJVF3YWQ3XN5UST3JTJOXSBHJ3C45AG7ZIFEBDRGIFKAIOWY6OA",
+  "evidenceRunAt": "2026-09-13T08:07:28.553Z",
+  "txHash": "0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84",
+  "ledger": 4652659
+}

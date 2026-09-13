@@ -171,6 +171,35 @@ export class X402Service {
   }
 
   /**
+   * Read the text memo of an on-chain transaction.
+   *
+   * Used to resolve a first-time payment back to the quote it was made
+   * against: the memo is a deterministic function of the quote id, so it is
+   * the one piece of on-chain data that identifies the quote window without
+   * trusting anything the caller sent. Best-effort by design — a missing memo,
+   * a non-text memo, a 404, or a Horizon failure all return null and the
+   * caller falls back to the previous (fail-closed) behavior rather than
+   * failing the request on an auxiliary lookup.
+   */
+  async fetchTransactionMemo(txHash: string): Promise<string | null> {
+    const config = getConfig();
+    try {
+      const response = await fetch(`${config.stellar.horizonUrl}/transactions/${txHash}`, {
+        signal: AbortSignal.timeout(config.stellar.horizonTimeoutMs),
+      });
+      if (!response.ok) return null;
+      const txData = (await response.json()) as Record<string, unknown>;
+      return txData.memo_type === 'text' && typeof txData.memo === 'string' ? txData.memo : null;
+    } catch (error) {
+      logger.warn('Could not read transaction memo for quote resolution', {
+        txHash,
+        error: String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
    * Verify that a user has sufficient prepaid escrow balance to cover the
    * quote amount. This allows callers to skip the per-request Stellar
    * payment when they have funded the credit-escrow contract.

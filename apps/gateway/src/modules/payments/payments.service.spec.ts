@@ -237,6 +237,37 @@ describe('PaymentsService', () => {
     });
   });
 
+  describe('findPendingByQuoteMemo', () => {
+    // Real quote: 0b197595-c04f-4e5f-90dc-11bebf00c7f6 → memo …11be
+    const QUOTE_ID = '0b197595-c04f-4e5f-90dc-11bebf00c7f6';
+    const MEMO = '0b197595c04f4e5f90dc11be';
+
+    it('resolves a pending, unconsumed quote on the route from its memo', async () => {
+      const pending = { id: 'pay-1', quoteId: QUOTE_ID, txHash: null, status: 'pending' };
+      (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(pending);
+
+      const result = await service.findPendingByQuoteMemo(MEMO, 'route-1');
+
+      expect(result).toEqual(pending);
+      expect(mockPrisma.payment.findFirst).toHaveBeenCalledWith({
+        where: {
+          routeId: 'route-1',
+          status: 'pending',
+          txHash: null,
+          quoteId: { startsWith: '0b197595-c04f-4e5f-90dc-11be' },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    it('skips the query entirely for a non-24-hex memo', async () => {
+      const result = await service.findPendingByQuoteMemo('numeric-memo', 'route-1');
+
+      expect(result).toBeNull();
+      expect(mockPrisma.payment.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findAll', () => {
     it("returns paginated payments scoped to the owner's providers", async () => {
       (mockPrisma.payment.findMany as jest.Mock).mockResolvedValue([]);

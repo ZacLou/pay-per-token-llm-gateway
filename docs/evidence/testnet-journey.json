@@ -1,59 +1,59 @@
 {
-  "runAt": "2026-09-09T15:24:22.551Z",
+  "runAt": "2026-09-13T08:07:28.553Z",
   "network": "testnet",
   "gatewayUrl": "http://127.0.0.1:3100",
   "horizonUrl": "https://horizon-testnet.stellar.org",
-  "usdcIssuer": "GBS36HWFB6QFYH6XF3DAPZQNSRMGTQWABYFKZ2C7IVCTVUZUTQGV7WQB",
+  "usdcIssuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
   "steps": {
     "fund": {
-      "issuer": "GBS36HWFB6QFYH6XF3DAPZQNSRMGTQWABYFKZ2C7IVCTVUZUTQGV7WQB",
-      "payer": "GBEL3LA2BYJFNU73BXWBXNGZDPEB47UWGGAUPFA2Z5ZJEQJZBAIII2DB",
-      "receiver": "GBU3Z6E4OCK6OZI6ZF572W5IITXS2F6Y4CCZKR5O7B2ZGBXUAC7MAEPJ"
+      "issuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+      "payer": "GAJWK3CZBBK5XZ4I7GJOAJWXT5LPVNFGQM5SFEAZMSNYUA4VBGZPEVLD",
+      "receiver": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5"
     },
     "trustline": {
-      "payerTxHash": "78fd2c2301e4c852eb7b2d805c5176d0da2e2035503e774bbbc4ca5130ee4a98",
-      "receiverTxHash": "1a721f580799f776f9577a58e6339cacb5525c05cc25011e19c9da9836947e26",
-      "asset": "USDC:GBS36HWFB6QFYH6XF3DAPZQNSRMGTQWABYFKZ2C7IVCTVUZUTQGV7WQB"
+      "payerTxHash": "6d3cb0e14701b8d98ae72f6a9373604ba2cab176b10182e32e4d770f704e9401",
+      "receiverTxHash": "575a70e9bc6134beadc20c7c07e037be193205bff05756b02d1d5a5a5fe06541",
+      "asset": "USDC:GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J"
     },
     "mint": {
-      "txHash": "b4feeef91f392c0e3ae3cd8d6d9ab943651b5d5006763c23f40abc6eb6c8e7d3",
+      "txHash": "91ed4bd8bb3657feee644f166053c3788833873a6f5c782a8b2384520245289a",
       "amount": "100 USDC"
     },
     "seed": {
       "providerId": "journey-provider",
-      "routeId": "56d939ed-41cb-4afc-a0d6-83734669611e"
+      "routeId": "f7f849cc-a208-4a9d-8084-83ddb6d13989"
     },
     "quote": {
       "quote": {
-        "id": "e0138fa2-76db-4a42-82f2-89b39d225011",
+        "id": "fdef58ea-c814-4155-9012-f413359dacca",
         "route": "/v1/chat/completions",
         "pricingModel": "flat",
         "amount": "1000000",
         "asset": "USDC",
-        "assetIssuer": "GBS36HWFB6QFYH6XF3DAPZQNSRMGTQWABYFKZ2C7IVCTVUZUTQGV7WQB",
-        "paymentAddress": "GBU3Z6E4OCK6OZI6ZF572W5IITXS2F6Y4CCZKR5O7B2ZGBXUAC7MAEPJ",
-        "memo": "e0138fa276db4a4282f289b3",
+        "assetIssuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+        "paymentAddress": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+        "memo": "fdef58eac81441559012f413",
         "network": "testnet",
-        "issuedAt": 1788967487,
-        "expiresAt": 1788967787,
-        "statusUrl": "http://127.0.0.1:3100/api/v1/payments/e0138fa2-76db-4a42-82f2-89b39d225011/status"
+        "issuedAt": 1789286878,
+        "expiresAt": 1789287178,
+        "statusUrl": "http://127.0.0.1:3100/api/v1/payments/fdef58ea-c814-4155-9012-f413359dacca/status"
       }
     },
     "pay": {
-      "txHash": "d5084d3d5bb648df7e3b73a2383187e12727e879e12976592900cebb93d2d810",
-      "ledger": 4588781,
+      "txHash": "0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84",
+      "ledger": 4652659,
       "amount": "0.1 USDC",
-      "to": "GBU3Z6E4OCK6OZI6ZF572W5IITXS2F6Y4CCZKR5O7B2ZGBXUAC7MAEPJ",
-      "memo": "e0138fa276db4a4282f289b3",
-      "horizon": "https://horizon-testnet.stellar.org/transactions/d5084d3d5bb648df7e3b73a2383187e12727e879e12976592900cebb93d2d810"
+      "to": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+      "memo": "fdef58eac81441559012f413",
+      "horizon": "https://horizon-testnet.stellar.org/transactions/0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84"
     },
     "forward": {
       "status": 200,
       "receipt": {
-        "id": "0356f092-10ed-48f5-b3a2-2f5ae0582aca",
-        "quoteId": "2522e1e8-fd00-46ae-be5f-dcfe5e7b94be",
-        "txHash": "d5084d3d5bb648df7e3b73a2383187e12727e879e12976592900cebb93d2d810",
-        "payerAddress": "GBEL3LA2BYJFNU73BXWBXNGZDPEB47UWGGAUPFA2Z5ZJEQJZBAIII2DB",
+        "id": "620ac991-d124-4e2e-b52d-2aa2c5b77de7",
+        "quoteId": "fdef58ea-c814-4155-9012-f413359dacca",
+        "txHash": "0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84",
+        "payerAddress": "GAJWK3CZBBK5XZ4I7GJOAJWXT5LPVNFGQM5SFEAZMSNYUA4VBGZPEVLD",
         "amount": "1000000",
         "asset": "USDC",
         "status": "confirmed",
@@ -72,7 +72,7 @@
     "balances": {
       "payer": [
         {
-          "asset": "USDC:GBS36HWF",
+          "asset": "USDC:GBY7K7YS",
           "balance": "99.9000000"
         },
         {
@@ -82,7 +82,7 @@
       ],
       "receiver": [
         {
-          "asset": "USDC:GBS36HWF",
+          "asset": "USDC:GBY7K7YS",
           "balance": "0.1000000"
         },
         {
@@ -93,7 +93,7 @@
       "issuer": [
         {
           "asset": "XLM",
-          "balance": "19999.9998900"
+          "balance": "19999.9999600"
         }
       ]
     }

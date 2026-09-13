@@ -1,0 +1,9 @@
+[
+  "x402_quotes_generated_total{pricing_model=\"flat\",service=\"x402-gateway\"} 8",
+  "x402_payments_verified_total{asset=\"USDC\",service=\"x402-gateway\"} 2",
+  "x402_payment_verification_failed_total{reason=\"Transaction not found on chain\",service=\"x402-gateway\"} 1",
+  "x402_underpayment_debts_recorded_total{service=\"x402-gateway\"} 0",
+  "x402_onchain_record_failures_total{service=\"x402-gateway\"} 0",
+  "x402_span_duration_ms_sum{service=\"x402-gateway\",span=\"http.request\"} 5977",
+  "x402_span_duration_ms_count{service=\"x402-gateway\",span=\"http.request\"} 115"
+]

@@ -38,6 +38,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec nx run-many --target=lint --all
 
+  # The pitch video is the project's primary presentation, so its narration is
+  # kept honest the same way the code is: every cue is measured against the
+  # scene budget it is spoken over. This job needs no dependencies — the check
+  # is pure Node — and fails the build if any cue would overrun its scene.
+  video-narration:
+    name: Video Narration Timing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version from .nvmrc
+        id: nvm
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvm.outputs.NODE_VERSION }}
+
+      - name: Check narration cues fit their scene budgets
+        run: node video/make-voiceover.mjs --check
+
   test:
     name: Test
     runs-on: ubuntu-latest

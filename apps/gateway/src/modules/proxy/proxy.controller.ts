@@ -291,7 +291,7 @@ export class ProxyController {
   ): Promise<boolean> {
     logger.info('Verifying payment', { traceId, txHash });
 
-    const existingPayment = await this.paymentsService.findByTxHash(txHash);
+    let existingPayment = await this.paymentsService.findByTxHash(txHash);
 
     // SECURITY — single-use invariant. A confirmed payment row means this
     // txHash has already been consumed; it must never grant access a second
@@ -329,6 +329,30 @@ export class ProxyController {
         message: 'This payment has already been used. A new payment is required.',
       });
       return false;
+    }
+
+    // First-time payment: no row carries this hash yet — the quote's own row
+    // is still pending with `txHash = NULL`, so the lookup above misses it.
+    // Resolve that quote from the transaction's on-chain memo, which is derived
+    // deterministically from the quote id. Without this, verification would
+    // mint a *new* quote at retry time and reject the (older, valid) payment
+    // with "Payment was made before the quote was issued". Best-effort: when
+    // the client paid without a memo, or no pending quote on this route
+    // matches, we fall through to the previous behavior — and the fresh
+    // quote's `issuedAt` lower bound still rejects historical payments, so an
+    // unresolved payment can never grant access.
+    if (!existingPayment) {
+      const memo = await this.x402Service.fetchTransactionMemo(txHash);
+      if (memo) {
+        existingPayment = await this.paymentsService.findPendingByQuoteMemo(memo, route.id);
+        if (existingPayment) {
+          logger.info('Resolved payment to its originating quote via memo', {
+            traceId,
+            txHash,
+            quoteId: existingPayment.quoteId,
+          });
+        }
+      }
     }
 
     // Use the original quote from the pending payment, or generate a new one.

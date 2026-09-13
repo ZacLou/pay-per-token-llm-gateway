@@ -35,6 +35,41 @@ export interface QuoteGeneratorOptions {
 export const DEFAULT_TOKEN_ESTIMATE = 4096;
 
 /**
+ * Derive the on-chain `Memo.text` for a quote.
+ *
+ * MEMO_TEXT is capped at 28 bytes; a dashless UUID is 32 hex characters, so
+ * the first 24 are used. This is deterministic: the memo is a pure function of
+ * the quote id, which is what lets the gateway resolve the originating quote
+ * from a transaction's memo at retry time.
+ */
+export function quoteMemo(quoteId: string): string {
+  return quoteId.replace(/-/g, '').slice(0, 24);
+}
+
+/**
+ * Inverse of {@link quoteMemo} for lookups.
+ *
+ * The memo is the first 24 hex characters of the dashless UUID: the whole of
+ * the first four UUID groups plus the first four characters of the fifth.
+ * Re-inserting the UUID dashes therefore yields the exact prefix a stored
+ * `quoteId` must start with — enough to find the pending quote behind a
+ * payment without any schema change.
+ *
+ * Returns null when the memo is not a 24-character hex string (e.g. a client
+ * paid without a memo, or a non-text memo type).
+ */
+export function quoteIdPrefixFromMemo(memo: string): string | null {
+  if (typeof memo !== 'string' || !/^[0-9a-f]{24}$/i.test(memo)) return null;
+  return [
+    memo.slice(0, 8),
+    memo.slice(8, 12),
+    memo.slice(12, 16),
+    memo.slice(16, 20),
+    memo.slice(20, 24),
+  ].join('-');
+}
+
+/**
  * Generate a payment quote for a given route configuration.
  *
  * For flat pricing: amount = flatPrice (exact charge per request).
@@ -76,7 +111,7 @@ export function generateQuote(options: QuoteGeneratorOptions): Quote {
   // MEMO_TEXT is limited to 28 bytes. Derive a deterministic short memo from
   // the quote id (UUID hex, dashes stripped → 32 chars, truncated to 24) so
   // payments can be attributed to their quote on-chain.
-  const memo = quoteId.replace(/-/g, '').slice(0, 24);
+  const memo = quoteMemo(quoteId);
 
   return {
     id: quoteId,

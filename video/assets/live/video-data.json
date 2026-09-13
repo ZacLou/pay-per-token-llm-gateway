@@ -1,0 +1,378 @@
+{
+  "quote": {
+    "status": 402,
+    "body": {
+      "status": 402,
+      "message": "Payment Required",
+      "quote": {
+        "id": "e13f6171-d53d-4003-a782-4d703dbb29fa",
+        "route": "/v1/chat/completions",
+        "pricingModel": "flat",
+        "amount": "1000000",
+        "asset": "USDC",
+        "assetIssuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+        "paymentAddress": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+        "memo": "e13f6171d53d4003a7824d70",
+        "network": "testnet",
+        "issuedAt": 1789288529,
+        "expiresAt": 1789288829,
+        "statusUrl": "http://127.0.0.1:3100/api/v1/payments/e13f6171-d53d-4003-a782-4d703dbb29fa/status"
+      },
+      "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5\n   Memo: e13f6171d53d4003a7824d70\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3100/api/v1/payments/e13f6171-d53d-4003-a782-4d703dbb29fa/status\n\nThis quote expires at: 2026-09-13T08:40:29.000Z",
+      "docs": "http://127.0.0.1:3100/docs/x402"
+    }
+  },
+  "replay": {
+    "status": 402,
+    "body": {
+      "status": 402,
+      "error": "Payment Required",
+      "message": "This payment has already been used. A new payment is required."
+    }
+  },
+  "forged": {
+    "status": 402,
+    "body": {
+      "status": 402,
+      "error": "Payment Required",
+      "message": "Payment verification failed: Transaction not found on chain"
+    }
+  },
+  "ready": {
+    "status": 200,
+    "body": {
+      "status": "ready",
+      "service": "x402-gateway",
+      "version": "0.1.0",
+      "timestamp": "2026-09-13T08:35:33.445Z",
+      "uptime": 1605.091681018,
+      "environment": "development",
+      "network": "testnet",
+      "checks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 1
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 1
+        }
+      }
+    }
+  },
+  "metrics": [
+    "x402_quotes_generated_total{pricing_model=\"flat\",service=\"x402-gateway\"} 8",
+    "x402_payments_verified_total{asset=\"USDC\",service=\"x402-gateway\"} 2",
+    "x402_payment_verification_failed_total{reason=\"Transaction not found on chain\",service=\"x402-gateway\"} 1",
+    "x402_underpayment_debts_recorded_total{service=\"x402-gateway\"} 0",
+    "x402_onchain_record_failures_total{service=\"x402-gateway\"} 0",
+    "x402_span_duration_ms_sum{service=\"x402-gateway\",span=\"http.request\"} 5977",
+    "x402_span_duration_ms_count{service=\"x402-gateway\",span=\"http.request\"} 115"
+  ],
+  "openapi": {
+    "openapi": "0.1.0",
+    "title": "x402 LLM Gateway",
+    "endpointCount": 45,
+    "pathCount": 31,
+    "tags": [
+      "health",
+      "metrics",
+      "x402",
+      "escrow",
+      "routes",
+      "auth",
+      "payments",
+      "analytics",
+      "proxy",
+      "providers",
+      "admin",
+      "webhooks",
+      "notifications"
+    ],
+    "sample": [
+      {
+        "method": "POST",
+        "path": "/api/v1/x402/verify"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/x402/status/{quoteId}"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/escrow/{address}/balance"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/routes"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/routes"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/routes/{id}"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/routes/{id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/routes/{id}"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/challenge"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/verify"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/auth/session"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/auth/session"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/payments"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/payments/{quoteId}/status"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/analytics/summary"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/analytics/timeseries"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/analytics/events"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/chat/completions"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/chat/completions"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/chat/completions"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/chat/completions"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/chat/completions"
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/api/v1/chat/completions"
+      },
+      {
+        "method": "HEAD",
+        "path": "/api/v1/chat/completions"
+      }
+    ]
+  },
+  "journey": {
+    "runAt": "2026-09-13T08:07:28.553Z",
+    "network": "testnet",
+    "gatewayUrl": "http://127.0.0.1:3100",
+    "horizonUrl": "https://horizon-testnet.stellar.org",
+    "usdcIssuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+    "steps": {
+      "fund": {
+        "issuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+        "payer": "GAJWK3CZBBK5XZ4I7GJOAJWXT5LPVNFGQM5SFEAZMSNYUA4VBGZPEVLD",
+        "receiver": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5"
+      },
+      "trustline": {
+        "payerTxHash": "6d3cb0e14701b8d98ae72f6a9373604ba2cab176b10182e32e4d770f704e9401",
+        "receiverTxHash": "575a70e9bc6134beadc20c7c07e037be193205bff05756b02d1d5a5a5fe06541",
+        "asset": "USDC:GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J"
+      },
+      "mint": {
+        "txHash": "91ed4bd8bb3657feee644f166053c3788833873a6f5c782a8b2384520245289a",
+        "amount": "100 USDC"
+      },
+      "seed": {
+        "providerId": "journey-provider",
+        "routeId": "f7f849cc-a208-4a9d-8084-83ddb6d13989"
+      },
+      "quote": {
+        "quote": {
+          "id": "fdef58ea-c814-4155-9012-f413359dacca",
+          "route": "/v1/chat/completions",
+          "pricingModel": "flat",
+          "amount": "1000000",
+          "asset": "USDC",
+          "assetIssuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+          "paymentAddress": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+          "memo": "fdef58eac81441559012f413",
+          "network": "testnet",
+          "issuedAt": 1789286878,
+          "expiresAt": 1789287178,
+          "statusUrl": "http://127.0.0.1:3100/api/v1/payments/fdef58ea-c814-4155-9012-f413359dacca/status"
+        }
+      },
+      "pay": {
+        "txHash": "0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84",
+        "ledger": 4652659,
+        "amount": "0.1 USDC",
+        "to": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+        "memo": "fdef58eac81441559012f413",
+        "horizon": "https://horizon-testnet.stellar.org/transactions/0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84"
+      },
+      "forward": {
+        "status": 200,
+        "receipt": {
+          "id": "620ac991-d124-4e2e-b52d-2aa2c5b77de7",
+          "quoteId": "fdef58ea-c814-4155-9012-f413359dacca",
+          "txHash": "0bce39e9af658d5869c40e8e3c620d17f4f173094e18af6aa1bc3f4d4124ed84",
+          "payerAddress": "GAJWK3CZBBK5XZ4I7GJOAJWXT5LPVNFGQM5SFEAZMSNYUA4VBGZPEVLD",
+          "amount": "1000000",
+          "asset": "USDC",
+          "status": "confirmed",
+          "actualCost": "1000000",
+          "tokensUsed": null
+        }
+      },
+      "replay-rejected": {
+        "status": 402,
+        "message": "This payment has already been used. A new payment is required."
+      },
+      "forged-rejected": {
+        "status": 402,
+        "message": "Payment verification failed: Transaction not found on chain"
+      },
+      "balances": {
+        "payer": [
+          {
+            "asset": "USDC:GBY7K7YS",
+            "balance": "99.9000000"
+          },
+          {
+            "asset": "XLM",
+            "balance": "9999.9999800"
+          }
+        ],
+        "receiver": [
+          {
+            "asset": "USDC:GBY7K7YS",
+            "balance": "0.1000000"
+          },
+          {
+            "asset": "XLM",
+            "balance": "9999.9999900"
+          }
+        ],
+        "issuer": [
+          {
+            "asset": "XLM",
+            "balance": "19999.9999600"
+          }
+        ]
+      }
+    }
+  },
+  "payment": {
+    "runAt": "2026-09-13T08:12:17.690Z",
+    "network": "testnet",
+    "gateway": "http://127.0.0.1:3100",
+    "issuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+    "payer": "GB6T73H5IR53325U353MIFP5K4WZRGCPJVTSNJ7N2LX3DBHKQVXXTTZV",
+    "providerWallet": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+    "steps": {
+      "trustline": "57c7c450f6e9b82df358cb6dbf202f89aa48a2f4a0ad926bef5724efae5bd41d",
+      "mint": "403c12d3bc8d890d95b01fee68d05b1225f2315fcec863dae7e9a4eec3f49c24",
+      "quote": {
+        "id": "c727e2a9-6cd3-46a8-9f93-7e04eb8203b2",
+        "amount": "1000000",
+        "asset": "USDC",
+        "memo": "c727e2a96cd346a89f937e04",
+        "issuedAt": 1789287127,
+        "expiresAt": 1789287427
+      },
+      "payment": {
+        "txHash": "0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0",
+        "ledger": 4652709,
+        "amount": "0.1 USDC",
+        "to": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+        "horizon": "https://horizon-testnet.stellar.org/transactions/0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0",
+        "explorer": "https://stellar.expert/explorer/testnet/tx/0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0"
+      },
+      "paidRetry": {
+        "status": 200,
+        "body": {
+          "args": {},
+          "data": "{\"model\":\"gpt-4-journey\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain x402 in one sentence.\"}]}",
+          "files": {},
+          "form": {},
+          "headers": {
+            "Accept": "*/*",
+            "Accept-Encoding": "br, gzip, deflate",
+            "Accept-Language": "*",
+            "Content-Length": "96",
+            "Content-Type": "application/json",
+            "Host": "httpbin.org",
+            "Sec-Fetch-Mode": "cors",
+            "Traceparent": "00-b3a7ebf18c3ef69c3a54cadcc95b185a-38f2e22d0af5e7ad-01",
+            "User-Agent": "node",
+            "X-Amzn-Trace-Id": "Root=1-6aa65ae0-6f151d077e8223b85db1898c",
+            "X-Request-Trace-Id": "b3a7ebf18c3ef69c3a54cadcc95b185a"
+          },
+          "json": {
+            "messages": [
+              {
+                "content": "Explain x402 in one sentence.",
+                "role": "user"
+              }
+            ],
+            "model": "gpt-4-journey"
+          },
+          "origin": "172.166.156.163",
+          "url": "https://httpbin.org/post"
+        },
+        "receipt": {
+          "id": "0b5526ca-4b7c-4f67-a910-0faa5088219d",
+          "quoteId": "c727e2a9-6cd3-46a8-9f93-7e04eb8203b2",
+          "txHash": "0d9f98e9fed64409e7abfe471445d257802010603237b287bf2b9ad5f2da18b0",
+          "payerAddress": "GB6T73H5IR53325U353MIFP5K4WZRGCPJVTSNJ7N2LX3DBHKQVXXTTZV",
+          "amount": "1000000",
+          "asset": "USDC",
+          "status": "confirmed",
+          "actualCost": "1000000",
+          "tokensUsed": null
+        }
+      },
+      "replay": {
+        "status": 402,
+        "body": {
+          "status": 402,
+          "error": "Payment Required",
+          "message": "This payment has already been used. A new payment is required."
+        },
+        "receipt": null
+      },
+      "balances": {
+        "payerUsdc": "100.0000000",
+        "providerUsdc": "0.3000000"
+      }
+    }
+  },
+  "capturedAt": "2026-09-13T08:36:43.457Z"
+}

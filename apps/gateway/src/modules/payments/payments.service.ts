@@ -4,6 +4,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma } from '@x402/database';
 import { logger } from '@x402/logger';
+import { quoteIdPrefixFromMemo } from '@x402/x402-core';
 import type {
   Quote,
   PaymentVerification,
@@ -147,6 +148,27 @@ export class PaymentsService {
   async findByTxHash(txHash: string): Promise<PaymentRecord | null> {
     return prisma.payment.findFirst({
       where: { txHash },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Find the still-pending quote behind an on-chain payment, using the
+   * transaction's memo.
+   *
+   * A first-time payment has no row carrying its hash yet — the quote's
+   * `Payment` row is still `pending` with `txHash = NULL`. The quote memo is
+   * derived deterministically from the quote id, so re-inserting the UUID
+   * dashes turns the memo into a `quoteId` prefix. Scoping to the requested
+   * route and to `txHash IS NULL` guarantees we only ever bind a payment to
+   * an unconsumed quote on the route it paid for.
+   */
+  async findPendingByQuoteMemo(memo: string, routeId: string): Promise<PaymentRecord | null> {
+    const prefix = quoteIdPrefixFromMemo(memo);
+    if (!prefix) return null;
+
+    return prisma.payment.findFirst({
+      where: { routeId, status: 'pending', txHash: null, quoteId: { startsWith: prefix } },
       orderBy: { createdAt: 'desc' },
     });
   }

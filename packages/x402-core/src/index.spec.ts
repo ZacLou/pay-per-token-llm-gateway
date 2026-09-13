@@ -3,6 +3,8 @@ import {
   buildPaymentRequiredResponse,
   calculatePrice,
   comparePayment,
+  quoteMemo,
+  quoteIdPrefixFromMemo,
   ReplayProtection,
   type RedisLike,
 } from './index';
@@ -86,6 +88,41 @@ describe('generateQuote', () => {
     expect(quote.memo).toBeDefined();
     expect(quote.memo!.length).toBeLessThanOrEqual(28);
     expect(quote.memo).toBe(quote.id.replace(/-/g, '').slice(0, 24));
+  });
+
+  describe('quote memo ⇄ quote id resolution', () => {
+    it('derives a memo that reconstructs to the quote id prefix', () => {
+      const quoteId = '0b197595-c04f-4e5f-90dc-11bebf00c7f6';
+      const memo = quoteMemo(quoteId);
+
+      expect(memo).toBe('0b197595c04f4e5f90dc11be');
+      expect(quoteId.startsWith(quoteIdPrefixFromMemo(memo)!)).toBe(true);
+    });
+
+    it('round-trips the UUID groups it captures', () => {
+      // The memo covers the first four groups in full plus four hex characters
+      // of the fifth, so the reconstructed prefix must carry the dashes back.
+      expect(quoteIdPrefixFromMemo('0b197595c04f4e5f90dc11be')).toBe(
+        '0b197595-c04f-4e5f-90dc-11be',
+      );
+    });
+
+    it('returns null for memos that are not 24 hex characters', () => {
+      expect(quoteIdPrefixFromMemo('')).toBeNull();
+      expect(quoteIdPrefixFromMemo('not-a-memo')).toBeNull();
+      // Non-hex character in an otherwise 24-char string.
+      expect(quoteIdPrefixFromMemo('0b197595c04f4e5f90dc11gz')).toBeNull();
+      // Too short to cover the fourth UUID group.
+      expect(quoteIdPrefixFromMemo('0b197595c04f4e5f90dc')).toBeNull();
+    });
+
+    it('never resolves a memo to a prefix longer than the memo itself', () => {
+      const prefix = quoteIdPrefixFromMemo(quoteMemo('ffffffff-ffff-4fff-8fff-aaaaaaaaaaaa'));
+      // The prefix ends after the fifth group's first four characters — the
+      // lookup must be a strict prefix, never the full id.
+      expect(prefix).toHaveLength(28);
+      expect(prefix).toBe('ffffffff-ffff-4fff-8fff-aaaa');
+    });
   });
 
   it('generates quote with per-token pricing (default token estimate)', () => {

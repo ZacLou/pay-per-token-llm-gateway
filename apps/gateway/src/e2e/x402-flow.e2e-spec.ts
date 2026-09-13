@@ -152,11 +152,22 @@ jest.mock('@x402/database', () => ({
         return Promise.resolve(record);
       }),
       findFirst: jest.fn().mockImplementation(({ where }: any) => {
-        if (where?.quoteId)
-          return Promise.resolve(mockPaymentStore.find((p) => p.quoteId === where.quoteId) || null);
-        if (where?.txHash)
-          return Promise.resolve(mockPaymentStore.find((p) => p.txHash === where.txHash) || null);
-        return Promise.resolve(null);
+        // Supports both exact lookups (quoteId, txHash) and the memo-based
+        // `quoteId.startsWith(prefix)` lookup the controller uses to resolve a
+        // first-time payment back to its originating quote.
+        const matches = mockPaymentStore.filter((p) => {
+          if (where?.routeId !== undefined && p.routeId !== where.routeId) return false;
+          if (where?.status !== undefined && p.status !== where.status) return false;
+          if (where?.txHash !== undefined && p.txHash !== where.txHash) return false;
+          if (where?.quoteId !== undefined) {
+            const q = where.quoteId;
+            if (q && typeof q === 'object' && q.startsWith !== undefined) {
+              if (!String(p.quoteId).startsWith(q.startsWith)) return false;
+            } else if (p.quoteId !== q) return false;
+          }
+          return true;
+        });
+        return Promise.resolve(matches.length ? matches[matches.length - 1] : null);
       }),
       findMany: jest.fn().mockImplementation(() => Promise.resolve(mockPaymentStore)),
       count: jest.fn().mockResolvedValue(0),
@@ -530,6 +541,164 @@ describe('x402 Gateway E2E — Core Flow', () => {
     expect(receipt.txHash).toBe(TX);
     expect(receipt.status).toBe('confirmed');
     expect(typeof receipt.quoteId).toBe('string');
+  });
+
+  it('resolves a first-time payment to its originating quote via the on-chain memo', async () => {
+    // Regression: a real client pays, then retries. At retry time no Payment
+    // row carries the hash yet (the quote's row is still pending), so
+    // verification used to mint a *fresh* quote and reject the older, valid
+    // payment with "Payment was made before the quote was issued". The memo is
+    // derived deterministically from the quote id, so the gateway can resolve
+    // the original quote instead.
+    const quoted = await request(app.getHttpServer())
+      .post('/api/v1/chat/completions')
+      .send({ model: 'gpt-4', messages: [{ role: 'user', content: 'Memo pay' }] })
+      .expect(402);
+
+    const quote = quoted.body.quote;
+    const hash = '5e' + 'f'.repeat(62);
+
+    const orig = global.fetch;
+    global.fetch = jest.fn().mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('/transactions/') && !u.includes('/operations')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: hash,
+            successful: true,
+            source_account: PAYER,
+            ledger: 12345,
+            // Paid one second into the quote window — i.e. before the retry.
+            created_at: new Date((quote.issuedAt + 1) * 1000).toISOString(),
+            memo_type: 'text',
+            memo: quote.memo,
+          }),
+        };
+      }
+      if (u.includes('/operations')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            _embedded: {
+              records: [
+                {
+                  type: 'payment',
+                  from: PAYER,
+                  to: PW,
+                  amount: '0.1000000',
+                  asset_code: 'USDC',
+                  asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+                  asset_type: 'credit_alphanum4',
+                },
+              ],
+            },
+          }),
+        };
+      }
+      if (u.includes('mock-llm')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'chatcmpl-memo-resolved',
+            object: 'chat.completion',
+            model: 'gpt-4',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'Paid via memo' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/chat/completions')
+        .set('X-Payment-Hash', hash)
+        .send({ model: 'gpt-4', messages: [{ role: 'user', content: 'Memo pay' }] })
+        .expect(200);
+
+      // The receipt must point at the ORIGINAL quote — proving the payment was
+      // bound to the quote it actually paid rather than one minted at retry.
+      const receipt = JSON.parse(res.headers['x-payment-receipt']);
+      expect(receipt.quoteId).toBe(quote.id);
+      expect(receipt.txHash).toBe(hash);
+      expect(res.body.id).toBe('chatcmpl-memo-resolved');
+
+      // The original pending row is the one consumed (single-use).
+      const row = mockPaymentStore.find((p) => p.quoteId === quote.id);
+      expect(row).toBeDefined();
+      expect(row!.txHash).toBe(hash);
+      expect(row!.status).toBe('confirmed');
+    } finally {
+      global.fetch = orig;
+    }
+  });
+
+  it('still rejects a historical payment with no resolvable quote (fail-closed)', async () => {
+    // A payment made long before any quote, carrying no memo to bind it to
+    // one, must never grant access — the fresh-quote lower bound rejects it.
+    const hash = '6f' + 'a'.repeat(62);
+    const orig = global.fetch;
+    global.fetch = jest.fn().mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('/transactions/') && !u.includes('/operations')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: hash,
+            successful: true,
+            source_account: PAYER,
+            ledger: 12345,
+            created_at: '2020-01-01T00:00:00.000Z',
+          }),
+        };
+      }
+      if (u.includes('/operations')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            _embedded: {
+              records: [
+                {
+                  type: 'payment',
+                  from: PAYER,
+                  to: PW,
+                  amount: '0.1000000',
+                  asset_code: 'USDC',
+                  asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+                  asset_type: 'credit_alphanum4',
+                },
+              ],
+            },
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/chat/completions')
+        .set('X-Payment-Hash', hash)
+        .send({ model: 'gpt-4', messages: [{ role: 'user', content: 'Old tx' }] })
+        .expect(402);
+
+      expect(res.body.message).toMatch(/before the quote was issued/i);
+    } finally {
+      global.fetch = orig;
+    }
   });
 
   it('rejects a malformed payment hash header with 400', async () => {

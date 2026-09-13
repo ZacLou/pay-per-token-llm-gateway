@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>x402 LLM Gateway — pitch stage</title>
+    <style>
+      @font-face {
+        font-family: 'InterLocal';
+        src: local('Inter');
+        font-weight: 100 900;
+      }
+
+      :root {
+        --accent: #22c55e;
+        --accent-2: #3b82f6;
+        --accent-soft: rgba(34, 197, 94, 0.16);
+        --ink: #f8fafc;
+        --muted: #94a3b8;
+        --dim: #64748b;
+        --panel: rgba(255, 255, 255, 0.035);
+        --panel-strong: rgba(255, 255, 255, 0.06);
+        --border: rgba(148, 163, 184, 0.18);
+        --bg: #06080b;
+        --mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+        --sans: 'Inter', 'DejaVu Sans', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(1200px 700px at 12% -10%, rgba(34, 197, 94, 0.13), transparent 60%),
+          radial-gradient(1000px 700px at 100% 110%, rgba(59, 130, 246, 0.14), transparent 60%),
+          linear-gradient(160deg, #06080b 0%, #0a0f16 55%, #070b11 100%);
+      }
+
+      /* Faint technical grid, drawn behind every scene. */
+      #grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: radial-gradient(1400px 900px at 50% 40%, #000 30%, transparent 78%);
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        padding: 74px 96px 190px;
+        display: flex;
+        flex-direction: column;
+        will-change: opacity, transform;
+        backface-visibility: hidden;
+      }
+
+      .scene[data-fill='flush'] {
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="grid"></div>
+      <div id="scenes"></div>
+      <div id="captions"></div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

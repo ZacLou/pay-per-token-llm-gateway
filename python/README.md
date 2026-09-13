@@ -3,7 +3,7 @@
 Python client SDK for the **x402** payment protocol — automatic
 **402 → pay → retry** for LLM gateways, mirroring the TypeScript
 [`@x402/sdk`](../packages/sdk). Python AI apps can use the
-[pay-per-token-llm-gateway](https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway)
+[pay-per-token-llm-gateway](https://github.com/mallonepay/pay-per-token-llm-gateway)
 as a drop-in LLM provider: the first request returns a `402 Payment
 Required` with a Stellar quote, the SDK pays it (build → sign → submit →
 confirm on-chain), then transparently retries with the `X-Payment-Hash`

@@ -1,0 +1,23 @@
+{
+  "status": 402,
+  "body": {
+    "status": 402,
+    "message": "Payment Required",
+    "quote": {
+      "id": "e13f6171-d53d-4003-a782-4d703dbb29fa",
+      "route": "/v1/chat/completions",
+      "pricingModel": "flat",
+      "amount": "1000000",
+      "asset": "USDC",
+      "assetIssuer": "GBY7K7YSKGMZ74BWX3SSU36MRZK2BO3724PUURO26EF3A5RSDL2WYO6J",
+      "paymentAddress": "GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5",
+      "memo": "e13f6171d53d4003a7824d70",
+      "network": "testnet",
+      "issuedAt": 1789288529,
+      "expiresAt": 1789288829,
+      "statusUrl": "http://127.0.0.1:3100/api/v1/payments/e13f6171-d53d-4003-a782-4d703dbb29fa/status"
+    },
+    "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GBS7TVUAPKLPNGVIR2NOTTNFMPIXA3NRAAS6E3HNGMAEI2MYMYNSHSD5\n   Memo: e13f6171d53d4003a7824d70\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3100/api/v1/payments/e13f6171-d53d-4003-a782-4d703dbb29fa/status\n\nThis quote expires at: 2026-09-13T08:40:29.000Z",
+    "docs": "http://127.0.0.1:3100/docs/x402"
+  }
+}

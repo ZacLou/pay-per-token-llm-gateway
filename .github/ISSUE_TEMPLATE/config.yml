@@ -2,8 +2,8 @@ blank_issues_enabled: true
 
 contact_links:
   - name: Security Vulnerability
-    url: https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/security/advisories/new
+    url: https://github.com/mallonepay/pay-per-token-llm-gateway/security/advisories/new
     about: Report a security vulnerability privately
   - name: x402 Protocol Discussion
-    url: https://github.com/Pay-Per-Token-LLM-Gateway/pay-per-token-llm-gateway/discussions
+    url: https://github.com/mallonepay/pay-per-token-llm-gateway/discussions
     about: Discuss ideas, ask questions, or propose protocol changes
