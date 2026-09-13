@@ -1,0 +1,332 @@
+{
+  "provider": "piper",
+  "voice": {
+    "model": null,
+    "lengthScale": 1,
+    "sentenceSilence": 0.2
+  },
+  "total": 289,
+  "clips": [
+    {
+      "scene": "open",
+      "cue": 1,
+      "at": 0.8,
+      "start": 0.8,
+      "duration": 5.645083333333333,
+      "window": 8.2
+    },
+    {
+      "scene": "problem",
+      "cue": 1,
+      "at": 0.4,
+      "start": 9.4,
+      "duration": 3.3811666666666667,
+      "window": 6
+    },
+    {
+      "scene": "problem",
+      "cue": 2,
+      "at": 6.4,
+      "start": 15.4,
+      "duration": 4.48675,
+      "window": 6
+    },
+    {
+      "scene": "problem",
+      "cue": 3,
+      "at": 12.4,
+      "start": 21.4,
+      "duration": 4.275125,
+      "window": 5.999999999999998
+    },
+    {
+      "scene": "problem",
+      "cue": 4,
+      "at": 18.4,
+      "start": 27.4,
+      "duration": 3.39275,
+      "window": 5.600000000000001
+    },
+    {
+      "scene": "protocol",
+      "cue": 1,
+      "at": 0.4,
+      "start": 33.4,
+      "duration": 5.285208333333333,
+      "window": 5.8
+    },
+    {
+      "scene": "protocol",
+      "cue": 2,
+      "at": 6.2,
+      "start": 39.2,
+      "duration": 4.449291666666666,
+      "window": 5.8
+    },
+    {
+      "scene": "protocol",
+      "cue": 3,
+      "at": 12,
+      "start": 45,
+      "duration": 4.170625,
+      "window": 5.399999999999999
+    },
+    {
+      "scene": "protocol",
+      "cue": 4,
+      "at": 17.4,
+      "start": 50.4,
+      "duration": 4.646625,
+      "window": 6.600000000000001
+    },
+    {
+      "scene": "flow",
+      "cue": 1,
+      "at": 0.4,
+      "start": 57.4,
+      "duration": 4.9859583333333335,
+      "window": 7.199999999999999
+    },
+    {
+      "scene": "flow",
+      "cue": 2,
+      "at": 7.6,
+      "start": 64.6,
+      "duration": 6.460416666666666,
+      "window": 8.4
+    },
+    {
+      "scene": "flow",
+      "cue": 3,
+      "at": 16,
+      "start": 73,
+      "duration": 5.44775,
+      "window": 7.600000000000001
+    },
+    {
+      "scene": "flow",
+      "cue": 4,
+      "at": 23.6,
+      "start": 80.6,
+      "duration": 7.0615,
+      "window": 7.799999999999997
+    },
+    {
+      "scene": "flow",
+      "cue": 5,
+      "at": 31.4,
+      "start": 88.4,
+      "duration": 5.92375,
+      "window": 9.600000000000001
+    },
+    {
+      "scene": "live",
+      "cue": 1,
+      "at": 0.4,
+      "start": 98.4,
+      "duration": 5.076208333333334,
+      "window": 12.1
+    },
+    {
+      "scene": "live",
+      "cue": 2,
+      "at": 12.5,
+      "start": 110.5,
+      "duration": 6.69,
+      "window": 8
+    },
+    {
+      "scene": "live",
+      "cue": 3,
+      "at": 20.5,
+      "start": 118.5,
+      "duration": 3.9384166666666665,
+      "window": 6.5
+    },
+    {
+      "scene": "live",
+      "cue": 4,
+      "at": 27,
+      "start": 125,
+      "duration": 4.054541666666666,
+      "window": 6.5
+    },
+    {
+      "scene": "live",
+      "cue": 5,
+      "at": 33.5,
+      "start": 131.5,
+      "duration": 3.49725,
+      "window": 5.5
+    },
+    {
+      "scene": "live",
+      "cue": 6,
+      "at": 39,
+      "start": 137,
+      "duration": 4.0339583333333335,
+      "window": 7.5
+    },
+    {
+      "scene": "live",
+      "cue": 7,
+      "at": 46.5,
+      "start": 144.5,
+      "duration": 2.4871666666666665,
+      "window": 5.5
+    },
+    {
+      "scene": "product",
+      "cue": 1,
+      "at": 1,
+      "start": 151,
+      "duration": 3.5785416666666667,
+      "window": 5.2
+    },
+    {
+      "scene": "product",
+      "cue": 2,
+      "at": 6.2,
+      "start": 156.2,
+      "duration": 4.066125,
+      "window": 5.2
+    },
+    {
+      "scene": "product",
+      "cue": 3,
+      "at": 11.4,
+      "start": 161.4,
+      "duration": 3.0909166666666668,
+      "window": 5.200000000000001
+    },
+    {
+      "scene": "product",
+      "cue": 4,
+      "at": 16.6,
+      "start": 166.6,
+      "duration": 3.276666666666667,
+      "window": 5.199999999999999
+    },
+    {
+      "scene": "product",
+      "cue": 5,
+      "at": 21.8,
+      "start": 171.8,
+      "duration": 3.8687916666666666,
+      "window": 6.199999999999999
+    },
+    {
+      "scene": "architecture",
+      "cue": 1,
+      "at": 0.4,
+      "start": 178.4,
+      "duration": 7.340166666666667,
+      "window": 8.6
+    },
+    {
+      "scene": "architecture",
+      "cue": 2,
+      "at": 9,
+      "start": 187,
+      "duration": 7.177625,
+      "window": 10
+    },
+    {
+      "scene": "architecture",
+      "cue": 3,
+      "at": 19,
+      "start": 197,
+      "duration": 7.723291666666666,
+      "window": 10
+    },
+    {
+      "scene": "architecture",
+      "cue": 4,
+      "at": 29,
+      "start": 207,
+      "duration": 7.119583333333333,
+      "window": 12
+    },
+    {
+      "scene": "why",
+      "cue": 1,
+      "at": 0.4,
+      "start": 219.4,
+      "duration": 5.125291666666667,
+      "window": 8
+    },
+    {
+      "scene": "why",
+      "cue": 2,
+      "at": 8.4,
+      "start": 227.4,
+      "duration": 7.015083333333333,
+      "window": 8.6
+    },
+    {
+      "scene": "why",
+      "cue": 3,
+      "at": 17,
+      "start": 236,
+      "duration": 3.7875,
+      "window": 7.399999999999999
+    },
+    {
+      "scene": "why",
+      "cue": 4,
+      "at": 24.4,
+      "start": 243.4,
+      "duration": 5.53425,
+      "window": 5.600000000000001
+    },
+    {
+      "scene": "quality",
+      "cue": 1,
+      "at": 0.4,
+      "start": 249.4,
+      "duration": 7.514291666666667,
+      "window": 8
+    },
+    {
+      "scene": "quality",
+      "cue": 2,
+      "at": 8.4,
+      "start": 257.4,
+      "duration": 4.9485,
+      "window": 7
+    },
+    {
+      "scene": "quality",
+      "cue": 3,
+      "at": 15.4,
+      "start": 264.4,
+      "duration": 5.473583333333333,
+      "window": 7.6
+    },
+    {
+      "scene": "close",
+      "cue": 1,
+      "at": 0.6,
+      "start": 272.6,
+      "duration": 4.489375,
+      "window": 6.4
+    },
+    {
+      "scene": "close",
+      "cue": 2,
+      "at": 7,
+      "start": 279,
+      "duration": 3.5437083333333335,
+      "window": 5.4
+    },
+    {
+      "scene": "close",
+      "cue": 3,
+      "at": 12.4,
+      "start": 284.4,
+      "duration": 2.571083333333333,
+      "window": 4.6
+    }
+  ],
+  "generatedAt": "2026-09-13T12:58:34.158Z"
+}

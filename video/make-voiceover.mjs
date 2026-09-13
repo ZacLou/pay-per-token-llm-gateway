@@ -3,18 +3,24 @@
  *
  * The narration in `narration.json` is the single source of truth for both the
  * burned-in captions and the spoken track, so the audio always says exactly
- * what the video shows.
+ * what the video shows. Each cue is synthesized as its own utterance and placed
+ * at that cue's own time, so a caption changes precisely when its line starts
+ * being spoken. (Synthesizing a whole scene as one block instead makes the voice
+ * run ahead of the later cues, because a continuous read does not take the
+ * pauses the cue timings are built around.)
  *
  * Providers (all return 24 kHz, 16-bit mono PCM):
  *   - elevenlabs  (default) ELEVENLABS_API_KEY
  *   - openai                OPENAI_API_KEY
  *   - cartesia              CARTESIA_API_KEY
  *   - gemini                GEMINI_API_KEY | GOOGLE_API_KEY
+ *   - piper                 PIPER_MODEL (+ PIPER_BIN) — local, no key, no network
  *
  *   node video/make-voiceover.mjs --dry-run             # estimate timing, no API call
  *   node video/make-voiceover.mjs --check               # same, but exit 1 on overrun (CI)
  *   ELEVENLABS_API_KEY=... node video/make-voiceover.mjs
  *   node video/make-voiceover.mjs --provider openai     # force a provider
+ *   PIPER_MODEL=... node video/make-voiceover.mjs --provider piper
  *   node video/make-voiceover.mjs --out docs/media/x402-gateway-demo.mp4
  *                                                     # voice the featured cut in place
  *
@@ -175,6 +181,11 @@ const DEFAULT_VOICES = {
   openai: { voice: 'onyx', model: 'gpt-4o-mini-tts' },
   cartesia: { modelId: 'sonic-2', voiceId: null },
   gemini: { model: 'gemini-3.1-flash-tts-preview', voiceName: 'Kore' },
+  // piper is a local binary rather than an HTTP API: there is no key to find,
+  // and `model` is a path on this machine (PIPER_MODEL). lengthScale >1 speaks
+  // slower — but the cue windows are already tight (the narrowest line leaves
+  // about 3% of slack), so much above 1 pushes a line past the next cue.
+  piper: { model: null, lengthScale: 1.0, sentenceSilence: 0.2 },
 };
 
 /** Merge narration.voice.providers[provider] over the built-in defaults. */
@@ -323,6 +334,52 @@ async function synthGemini(cfg, text, key, voice) {
   throw new Error(lastError || 'Gemini TTS failed');
 }
 
+/**
+ * piper — local neural TTS (https://github.com/rhasspy/piper). No key, no
+ * network. The binary and the voice model are resolved from the environment so
+ * nothing machine-specific is committed, mirroring PLAYWRIGHT_MODULE in
+ * render.mjs.
+ */
+async function synthPiper(cfg, text, key, voice) {
+  const bin = process.env.PIPER_BIN || '/tmp/video-tools/piper/piper';
+  const model = cfg.model || process.env.PIPER_MODEL;
+  if (!existsSync(bin)) {
+    throw new Error(`piper binary not found at ${bin} — set PIPER_BIN (see video/README.md)`);
+  }
+  if (!model || !existsSync(model)) {
+    throw new Error(
+      `piper voice model not found: ${model || '(PIPER_MODEL unset)'} — set PIPER_MODEL (see video/README.md)`,
+    );
+  }
+
+  // `-f -` streams the finished WAV to stdout, so no temp file is needed.
+  const wavOut = await new Promise((resolve, reject) => {
+    const c = spawn(
+      bin,
+      [
+        '-m', model,
+        '-f', '-',
+        '--length_scale', String(cfg.lengthScale ?? 1),
+        '--sentence_silence', String(cfg.sentenceSilence ?? 0.2),
+        '-q',
+      ],
+      { stdio: ['pipe', 'pipe', 'inherit'] },
+    );
+    const chunks = [];
+    c.stdout.on('data', (d) => chunks.push(d));
+    c.on('error', reject);
+    c.on('close', (code) =>
+      code === 0 ? resolve(Buffer.concat(chunks)) : reject(new Error(`piper exited ${code}`)),
+    );
+    c.stdin.on('error', () => {});
+    c.stdin.end(text);
+  });
+
+  // piper voices are 22.05 kHz; the track is 24 kHz, so resample through ffmpeg
+  // exactly like the cloud providers that hand back mp3 rather than raw PCM.
+  return { pcm: await decodeToPcm(wavOut, 24000), rate: 24000 };
+}
+
 const PROVIDERS = {
   elevenlabs: { names: ['ELEVENLABS_API_KEY', 'ELEVEN_LABS_API_KEY'], synth: synthElevenLabs },
   openai: { names: ['OPENAI_API_KEY'], synth: synthOpenAI },
@@ -335,6 +392,9 @@ const PROVIDERS = {
     names: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY', 'GOOGLE_AI_API_KEY'],
     synth: synthGemini,
   },
+  // `local: true` marks a provider with no credential to discover — main()
+  // skips the key lookup for it.
+  piper: { names: [], synth: synthPiper, local: true },
 };
 
 /** Words-per-minute estimate used only for the dry run. */
@@ -400,7 +460,9 @@ async function main() {
     log(`  unknown provider "${requested}" — falling back to gemini`);
   }
   const impl = PROVIDERS[provider];
-  const found = await findKey(impl.names);
+  const found = impl.local
+    ? { key: null, source: 'local binary (no API key)' }
+    : await findKey(impl.names);
   if (!found) {
     log(
       `\n  No ${provider} API key found (looked for ${impl.names.join(', ')}).\n` +
@@ -420,23 +482,40 @@ async function main() {
   const clips = [];
 
   let cursor = 0;
+  const overruns = [];
   for (const scene of scenes) {
-    const text = sceneScript(scene);
-    log(`  synthesizing ${scene.id} (${text.length} chars)`);
-    const { pcm, rate: gotRate } = await impl.synth(cfg, text, found.key, voice);
-    if (gotRate !== rate) log(`    note: model returned ${gotRate} Hz (expected ${rate} Hz)`);
-    const duration = pcm.length / 2 / gotRate;
-    const startSample = Math.round(cursor * rate);
-    const maxSamples = totalSamples - startSample;
-    const copySamples = Math.min(pcm.length / 2, maxSamples);
-    pcm.copy(track, startSample * 2, 0, copySamples * 2);
-    clips.push({ id: scene.id, start: cursor, duration, budget: scene.duration });
-    const verdict =
-      duration <= scene.duration
-        ? 'fits'
-        : `OVER by ${(duration - scene.duration).toFixed(1)}s — extend this scene and re-render`;
-    log(`    ${duration.toFixed(1)}s / ${scene.duration}s budget — ${verdict}`);
+    const cues = [...(scene.cues || [])].sort((a, b) => a.at - b.at);
+    log(`  synthesizing ${scene.id} (${cues.length} cue${cues.length === 1 ? '' : 's'})`);
+    for (let i = 0; i < cues.length; i++) {
+      const cue = cues[i];
+      // The cue's window runs to the next cue, or to the end of the scene.
+      const window = (cues[i + 1]?.at ?? scene.duration) - cue.at;
+      const { pcm, rate: gotRate } = await impl.synth(cfg, stripTags(cue.text), found.key, voice);
+      if (gotRate !== rate) log(`    note: model returned ${gotRate} Hz (expected ${rate} Hz)`);
+      const duration = pcm.length / 2 / gotRate;
+      const start = cursor + cue.at;
+      const startSample = Math.round(start * rate);
+      const maxSamples = totalSamples - startSample;
+      const copySamples = Math.min(pcm.length / 2, maxSamples);
+      pcm.copy(track, startSample * 2, 0, copySamples * 2);
+      clips.push({ scene: scene.id, cue: i + 1, at: cue.at, start, duration, window });
+      const fits = duration <= window + 1e-9;
+      if (!fits) overruns.push({ scene: scene.id, cue: i + 1, duration, window });
+      log(
+        `    cue ${i + 1}/${cues.length}  ${duration.toFixed(1)}s / ${window.toFixed(1)}s — ${
+          fits ? 'fits' : `OVER by ${(duration - window).toFixed(1)}s`
+        }`,
+      );
+    }
     cursor += scene.duration;
+  }
+
+  if (overruns.length) {
+    log(`\n  WARNING: ${overruns.length} cue(s) overran their window and overlap the next cue:`);
+    for (const o of overruns) {
+      log(`    ${o.scene} cue ${o.cue}: ${o.duration.toFixed(1)}s / ${o.window.toFixed(1)}s`);
+    }
+    log('  Shorten the line or move the cue times in video/narration.json, then re-run.');
   }
 
   await mkdir(path.dirname(OUT), { recursive: true });
@@ -469,6 +548,12 @@ async function main() {
           '-hide_banner', '-loglevel', 'error', '-y',
           '-i', VIDEO,
           '-i', tmpWav,
+          // Map explicitly. Re-voicing an already-voiced file is normal — that is
+          // exactly what `--out` == `--video` does — and without this, ffmpeg's
+          // default stream selection keeps the audio already inside the input
+          // video and silently drops the track we just synthesized.
+          '-map', '0:v:0',
+          '-map', '1:a:0',
           '-c:v', 'copy',
           '-c:a', 'aac',
           '-b:a', '192k',

@@ -29,20 +29,20 @@ artifacts are committed under `docs/media/`.
 
 ## Files
 
-| Path                                  | Role                                                                                                                               |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `narration.json`                      | **Single source of truth**: scene order, durations, captions, TTS voice                                                            |
-| `stage.html`                          | 1920×1080 stage shell (fonts, background, caption track)                                                                           |
-| `src/ui.js`                           | DOM helpers, easing, syntax highlighting, component styles                                                                         |
-| `src/scenes.js`                       | The ten scenes, each driven by scene-local time                                                                                    |
-| `src/main.js`                         | Timeline driver: composites scenes, renders captions, exposes `render(t)`                                                          |
-| `capture.mjs`                         | Captures real UI/chain/repo assets from the running stack                                                                          |
-| `seed-demo.sql`                       | Idempotent demo dataset for the dashboard screenshots                                                                              |
-| `live-payment.mjs`                    | Performs a real Stellar testnet payment and records the responses                                                                  |
-| `render.mjs`                          | Frame capture → ffmpeg → MP4, thumbnail and SRT                                                                                    |
-| `make-voiceover.mjs`                  | Voiced narration (ElevenLabs/OpenAI/Cartesia/Gemini) + mux                                                                         |
-| `assets/`                             | Captured screenshots and recorded JSON evidence                                                                                    |
-| `assets/live/voiceover-manifest.json` | Narration provenance: provider, voice, and each scene's generated clip length against its budget (written by `make-voiceover.mjs`) |
+| Path                                  | Role                                                                                                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `narration.json`                      | **Single source of truth**: scene order, durations, captions, TTS voice                                                          |
+| `stage.html`                          | 1920×1080 stage shell (fonts, background, caption track)                                                                         |
+| `src/ui.js`                           | DOM helpers, easing, syntax highlighting, component styles                                                                       |
+| `src/scenes.js`                       | The ten scenes, each driven by scene-local time                                                                                  |
+| `src/main.js`                         | Timeline driver: composites scenes, renders captions, exposes `render(t)`                                                        |
+| `capture.mjs`                         | Captures real UI/chain/repo assets from the running stack                                                                        |
+| `seed-demo.sql`                       | Idempotent demo dataset for the dashboard screenshots                                                                            |
+| `live-payment.mjs`                    | Performs a real Stellar testnet payment and records the responses                                                                |
+| `render.mjs`                          | Frame capture → ffmpeg → MP4, thumbnail and SRT                                                                                  |
+| `make-voiceover.mjs`                  | Voiced narration (ElevenLabs/OpenAI/Cartesia/Gemini or local piper) + mux                                                        |
+| `assets/`                             | Captured screenshots and recorded JSON evidence                                                                                  |
+| `assets/live/voiceover-manifest.json` | Narration provenance: provider, voice, and each cue's generated clip length against its window (written by `make-voiceover.mjs`) |
 
 ## Prerequisites
 
@@ -57,6 +57,19 @@ npx -y playwright@1.63.0 install --with-deps chromium
 
 Playwright is resolved from `PLAYWRIGHT_MODULE`, then a normal install, then
 `/tmp/video-tools/node_modules`.
+
+To narrate without any cloud key, piper runs the TTS locally:
+
+```bash
+mkdir -p /tmp/video-tools/piper/voices && cd /tmp/video-tools
+curl -sSL https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz | tar xz
+BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high
+curl -sSL -o piper/voices/en_US-ryan-high.onnx      "$BASE/en_US-ryan-high.onnx"
+curl -sSL -o piper/voices/en_US-ryan-high.onnx.json "$BASE/en_US-ryan-high.onnx.json"
+```
+
+piper is resolved from `PIPER_BIN` (default `/tmp/video-tools/piper/piper`) and
+its voice from `PIPER_MODEL`.
 
 ## Regenerating the demo environment
 
@@ -86,8 +99,9 @@ node video/render.mjs
 `render.mjs` writes a **silent** `docs/media/x402-gateway-demo.mp4`; the
 burned-in captions and the `.srt` are the narration's script. `make-voiceover.mjs`
 then synthesizes that script and muxes the track back onto the same file, so the
-featured cut is the voiced one. Pick any supported provider — all four return
-24 kHz 16-bit mono, so the mux is identical:
+featured cut is the voiced one. Pick any supported provider; the cloud voices
+return 24 kHz 16-bit mono and piper's 22.05 kHz output is resampled to it, so the
+mux is identical:
 
 ```bash
 # validate narration timing without any API call
@@ -100,6 +114,10 @@ ELEVENLABS_API_KEY=... node video/make-voiceover.mjs --out docs/media/x402-gatew
 OPENAI_API_KEY=...   node video/make-voiceover.mjs --provider openai --out docs/media/x402-gateway-demo.mp4
 CARTESIA_API_KEY=... node video/make-voiceover.mjs --provider cartesia --out docs/media/x402-gateway-demo.mp4
 GEMINI_API_KEY=...   node video/make-voiceover.mjs --provider gemini --out docs/media/x402-gateway-demo.mp4
+
+# local piper — no API key and no network; PIPER_MODEL is required
+PIPER_MODEL=/tmp/video-tools/piper/voices/en_US-ryan-high.onnx \
+  node video/make-voiceover.mjs --provider piper --out docs/media/x402-gateway-demo.mp4
 ```
 
 `--out` defaults to `docs/media/x402-gateway-demo-voiced.mp4`, so drop the flag
@@ -107,9 +125,12 @@ to keep the silent render alongside a separate voiced copy. Pointing `--out` at
 the input voices the featured file **in place**: the mux is written beside it and
 swapped in only after ffmpeg succeeds, so a failed run cannot truncate the video.
 
-The script measures every generated clip against its scene budget and reports
-any overrun instead of silently clipping narration, and records what it
-synthesized — provider, voice, and per-scene clip length vs budget — in
+The script synthesizes one clip per cue and places it at that cue's own time, so
+a caption changes exactly when its line starts being spoken. Each clip is then
+measured against its window — the time until the next cue, or the end of the
+scene — and any overrun is reported instead of silently clipping narration, at
+the cost of overlapping the next line. It records what it synthesized —
+provider, voice, and each cue's clip length vs window — in
 `assets/live/voiceover-manifest.json`. `narration.json` holds the provider,
 voice ids, style prompt and per-scene text, so re-recording is a config change.
 Voice ids/models default to a narration-friendly voice per provider and can be
@@ -124,7 +145,7 @@ overridden under `voice.providers` in `narration.json`.
 | `live/live-payment.json`                       | a real Stellar **testnet** payment made by `live-payment.mjs` — including the successful paid retry (`HTTP 200`) and its receipt |
 | `live/openapi.json`                            | the gateway's real OpenAPI document (`/api/docs-json`)                                                                           |
 | `live/ready.json`, `live/metrics.json`         | live health + Prometheus output                                                                                                  |
-| `live/voiceover-manifest.json`                 | narration provenance — the TTS provider/voice used and each scene's generated clip length vs its budget                          |
+| `live/voiceover-manifest.json`                 | narration provenance — the TTS provider/voice used and each cue's generated clip length vs its window                            |
 | `stellar-expert-tx.png`                        | the real transaction, captured from Stellar Expert                                                                               |
 | `repo.png`, `login.png`, `swagger*.png`        | the public repo page and the running dashboard                                                                                   |
 | dashboard screenshots                          | the real dashboard, authenticated with a real wallet session                                                                     |

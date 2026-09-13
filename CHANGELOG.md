@@ -82,14 +82,17 @@ quote was issued"`. At retry time no `Payment` row carried the hash yet (the
 ### Added
 
 - **Product pitch video** (`docs/media/x402-gateway-demo.mp4`, 1080p, ~5 min)
-  with thumbnail, burned-in captions and an `.srt`, featured in the README. It
+  with thumbnail, burned-in captions, an `.srt` and a synthesized voice-over,
+  featured in the README. It
   is rendered from a deterministic stage fed by assets captured from a live
   gateway + dashboard, and now shows the full paid flow: a real Stellar testnet
   USDC payment, a `200` with payment receipt, then replay and forged-hash
   rejection. Pipeline and provenance: `video/README.md`.
 - **Provider-agnostic narration:** `video/make-voiceover.mjs` synthesizes the
   voice-over with ElevenLabs, OpenAI, Cartesia or Gemini (all normalized to
-  24 kHz mono) and muxes it onto the video.
+  24 kHz mono), or entirely locally with piper when no API key is available, and
+  muxes it onto the video. Each cue is synthesized and placed at its own caption
+  time, so a caption changes exactly when its line starts being spoken.
 - **`pnpm video:check`** (and a `Video Narration Timing` CI job) fails the build
   when any narration cue would overrun the scene budget it is spoken over.
 - **Persisted in-app notifications:** `POST/GET /api/v1/notifications` backed
