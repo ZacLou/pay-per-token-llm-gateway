@@ -9,12 +9,23 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { MetricsInterceptor } from './common/metrics.interceptor';
 import { MetricsService } from './common/metrics.service';
 import { createTraceContextMiddleware } from './common/trace-context.middleware';
+import { assertSchemaMigrated } from './common/schema-guard';
 import { getConfig, validateEnv } from '@x402/config';
 import { logger, enableJsonLogs } from '@x402/logger';
+import { prisma } from '@x402/database';
 
 async function bootstrap() {
   // Fail fast if required environment variables are missing
   validateEnv();
+
+  // Fail fast if the database schema was never migrated.
+  //
+  // A deploy that skips `prisma migrate deploy` otherwise boots "healthy"
+  // against an empty database — /health answers and the readiness SELECT 1
+  // succeeds, because neither needs a table — and then every API call fails
+  // with a Prisma "table does not exist" error at request time. Checking here
+  // turns that silent outage into an unmissable startup failure.
+  await assertSchemaMigrated(prisma);
 
   // Structured JSON logs in production for log aggregators
   if (process.env.NODE_ENV === 'production') {

@@ -23,6 +23,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "nx run database:generate",
     "db:migrate": "nx run database:migrate",
+    "db:migrate:deploy": "nx run database:migrate:deploy",
     "db:push": "nx run database:push",
     "db:studio": "nx run database:studio",
     "docker:build": "docker compose -f infrastructure/docker/docker-compose.yml build",

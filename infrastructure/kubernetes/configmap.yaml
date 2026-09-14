@@ -23,6 +23,13 @@ data:
   USDC_ISSUER: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
   CORS_ORIGINS: https://x402-dashboard.vercel.app
   TRUST_PROXY: '1'
+  # Migrations are applied by a dedicated Job (migrations-job.yaml), not by the
+  # gateway container — that keeps schema changes out of every replica's boot
+  # and lets the rollout wait on the Job. The gateway would default this to
+  # true, so it must be disabled explicitly here. Either way the gateway
+  # refuses to start against an unmigrated schema
+  # (apps/gateway/src/common/schema-guard.ts).
+  RUN_MIGRATIONS_ON_START: 'false'
   # Public base URL for the gateway (ingress host, not the in-cluster Service).
   # Without it, 402 quotes/instructions fall back to `http://0.0.0.0:3000`,
   # which clients cannot reach. Keep in sync with ingress.yaml.

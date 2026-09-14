@@ -19,6 +19,13 @@
         "command": "npx prisma migrate dev"
       }
     },
+    "migrate:deploy": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/database",
+        "command": "npx prisma migrate deploy"
+      }
+    },
     "push": {
       "executor": "nx:run-commands",
       "options": {

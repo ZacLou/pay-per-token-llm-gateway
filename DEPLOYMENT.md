@@ -42,6 +42,8 @@ Go to [railway.app](https://railway.app) and sign up with GitHub.
 | `DATABASE_URL`                      | `${{Postgres.DATABASE_URL}}` (Railway reference)           |
 | `REDIS_URL`                         | `${{Redis.REDIS_URL}}` (Railway reference)                 |
 | `JWT_SECRET`                        | (Generate: `openssl rand -base64 32`)                      |
+| `PUBLIC_GATEWAY_URL`                | `https://your-gateway.up.railway.app` — the **public** URL |
+| `TRUST_PROXY`                       | `1` (Railway terminates TLS one hop away)                  |
 | `USDC_ISSUER`                       | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` |
 | `CORS_ORIGINS`                      | `https://your-dashboard.vercel.app`                        |
 | `UPSTREAM_API_KEY_YOUR_PROVIDER_ID` | `sk-your-openai-api-key`                                   |
@@ -61,8 +63,18 @@ Click **Deploy**. The gateway will:
 
 1. Build the Docker image
 2. Connect to PostgreSQL and Redis
-3. Run Prisma migrations
+3. **Apply pending Prisma migrations** — the image entrypoint runs
+   `prisma migrate deploy` before starting the server
+   (`infrastructure/docker/docker-entrypoint.sh`), so a fresh deploy can never
+   come up against an empty schema
 4. Start on port 3000
+
+If the migrations fail, the container **exits** rather than serving traffic
+against a partial schema — read the Prisma error in the deploy logs. To manage
+migrations yourself instead (e.g. from CI), set
+`RUN_MIGRATIONS_ON_START=false` and run `pnpm db:migrate:deploy` against the
+production `DATABASE_URL`. The gateway still refuses to start against an
+unmigrated database either way (`apps/gateway/src/common/schema-guard.ts`).
 
 Note the gateway URL (e.g., `https://x402-gateway.up.railway.app`).
 

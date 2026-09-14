@@ -1,7 +1,10 @@
 # One-off Prisma migration Job.
 #
-# The gateway image does not run migrations on boot, so the database schema
-# must be applied before (and after every upgrade that ships new migrations):
+# The gateway Deployment runs with RUN_MIGRATIONS_ON_START=false, so the
+# database schema must be applied explicitly before (and after every upgrade
+# that ships new migrations). The image *can* migrate on boot, but keeping it
+# out of the gateway container stops every replica racing the same schema
+# change during a rollout:
 #
 #   kubectl apply -f migrations-job.yaml
 #   kubectl -n x402 wait --for=condition=complete job/prisma-migrate

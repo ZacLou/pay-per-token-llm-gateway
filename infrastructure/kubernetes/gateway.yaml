@@ -74,11 +74,14 @@ spec:
                 name: x402-config
             - secretRef:
                 name: x402-secrets
-          # NOTE: the gateway image does NOT run Prisma migrations on boot
-          # (CMD is `node dist/apps/gateway/main.js`). Apply the schema once
-          # before scaling the Deployment:
+          # NOTE: this Deployment disables the image entrypoint's migrations
+          # via RUN_MIGRATIONS_ON_START=false (see configmap.yaml), so schema
+          # changes never run per-replica during a rollout. Apply the schema
+          # once before scaling the Deployment:
           #   kubectl apply -f migrations-job.yaml   # runs `prisma migrate deploy`
           # Re-run the Job after every upgrade that ships a new migration.
+          # The gateway refuses to start against an unmigrated schema either
+          # way — see apps/gateway/src/common/schema-guard.ts.
           resources:
             requests:
               cpu: 250m
