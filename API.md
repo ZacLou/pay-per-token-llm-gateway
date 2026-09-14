@@ -78,7 +78,7 @@ and `/v1/chat/completions` path forms.
     "statusUrl": "https://gateway/api/v1/payments/<quoteId>/status"
   },
   "instructions": "Payment of 1000000 USDC is required…",
-  "docs": "https://gateway/docs/x402"
+  "docs": "https://gateway/api/docs"
 }
 ```
 

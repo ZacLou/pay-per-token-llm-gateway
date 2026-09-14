@@ -169,7 +169,12 @@ export function buildPaymentRequiredResponse(
     message: 'Payment Required',
     quote,
     instructions,
-    docs: `${gatewayBaseUrl}/docs/x402`,
+    // Swagger UI is mounted at `api/docs` in apps/gateway/src/main.ts, and it
+    // is mounted unconditionally (not gated on NODE_ENV), so it resolves in
+    // production too. This must name a route that actually exists: clients and
+    // SDKs follow `docs` from the 402 body, and the previous `/docs/x402`
+    // answered 404 — a dead link handed to every unpaid caller.
+    docs: `${gatewayBaseUrl}/api/docs`,
   };
 }
 

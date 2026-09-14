@@ -57,6 +57,49 @@ describe('assertSchemaMigrated', () => {
     await expect(assertSchemaMigrated(probe)).rejects.toThrow(/missing the "Route" table/);
   });
 
+  it('starts with a warning when a db push-managed database has no migration history', async () => {
+    // Regression: `prisma db push` — the workflow the README Quick Start
+    // documents — creates the full schema and no `_prisma_migrations` table.
+    // Requiring the history made the documented local flow unbootable.
+    const warn = jest.fn();
+
+    await expect(
+      assertSchemaMigrated(probeWith([...REQUIRED_SCHEMA_TABLES]), {
+        nodeEnv: 'development',
+        warn,
+      }),
+    ).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('not migration-managed'));
+  });
+
+  it('still refuses a push-managed database in production', async () => {
+    // The entrypoint runs `migrate deploy` on every boot, so missing history in
+    // production means migrations were bypassed and the schema will drift.
+    const warn = jest.fn();
+
+    await expect(
+      assertSchemaMigrated(probeWith([...REQUIRED_SCHEMA_TABLES]), {
+        nodeEnv: 'production',
+        warn,
+      }),
+    ).rejects.toThrow(/not migration-managed/);
+    await expect(
+      assertSchemaMigrated(probeWith([...REQUIRED_SCHEMA_TABLES]), { nodeEnv: 'production', warn }),
+    ).rejects.toThrow(/migrate deploy/);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('only treats a push-managed database as such when every core table is present', async () => {
+    // A partial schema without migration history is a failed migration, not a
+    // `db push`, and must not be waved through in development either.
+    const warn = jest.fn();
+
+    await expect(
+      assertSchemaMigrated(probeWith(['Provider', 'Route']), { nodeEnv: 'development', warn }),
+    ).rejects.toThrow(/not migrated/);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('recognises the P2021 code Prisma raises for model operations', async () => {
     const probe: SchemaProbe = {
       $queryRawUnsafe: jest.fn(async () => {

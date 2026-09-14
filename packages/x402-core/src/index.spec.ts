@@ -206,7 +206,7 @@ describe('buildPaymentRequiredResponse', () => {
     expect(response.quote).toEqual(quote);
     expect(response.instructions).toContain(quote.paymentAddress);
     expect(response.instructions).toContain('X-Payment-Hash');
-    expect(response.docs).toBe('http://localhost:3000/docs/x402');
+    expect(response.docs).toBe('http://localhost:3000/api/docs');
   });
 });
 

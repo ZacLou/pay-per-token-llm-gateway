@@ -363,8 +363,15 @@ pnpm dev:dashboard
 
 ### 6. Test the 402 Flow
 
+> ⚠️ The gateway quotes a price only for a **configured route**, and a freshly
+> pushed schema has none — so this answers
+> `404 {"message":"No route configured for model: gpt-4"}` until you register a
+> provider and a route ([DEPLOYMENT.md Part 3](./DEPLOYMENT.md#part-3-initialize-the-gateway)).
+> The `model` below must match that route's `model`. Step 7 exercises this flow
+> for you, against a seeded route, in one command.
+
 ```bash
-# Without payment — expect HTTP 402
+# Without payment — expect HTTP 402 once "gpt-4" has a route
 curl -X POST http://localhost:3000/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{

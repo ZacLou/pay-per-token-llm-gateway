@@ -25,7 +25,14 @@ async function bootstrap() {
   // succeeds, because neither needs a table — and then every API call fails
   // with a Prisma "table does not exist" error at request time. Checking here
   // turns that silent outage into an unmissable startup failure.
-  await assertSchemaMigrated(prisma);
+  //
+  // A `db push`-managed database (the documented local workflow) has no
+  // migration history but a complete schema: that is only refused in
+  // production, where the entrypoint guarantees `migrate deploy` has run.
+  await assertSchemaMigrated(prisma, {
+    nodeEnv: process.env.NODE_ENV,
+    warn: (message) => logger.warn(message),
+  });
 
   // Structured JSON logs in production for log aggregators
   if (process.env.NODE_ENV === 'production') {

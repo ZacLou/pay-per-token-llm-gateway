@@ -104,8 +104,16 @@ migrations yourself instead (e.g. from CI), set
 production `DATABASE_URL`. Railway can also run them as a pre-deploy step
 (`deploy.preDeployCommand`); if you use that, set
 `RUN_MIGRATIONS_ON_START=false` so they are not attempted twice. The gateway
-still refuses to start against an unmigrated database either way
+still refuses to start against an empty or partially migrated schema either way
 (`apps/gateway/src/common/schema-guard.ts`).
+
+The guard distinguishes an **empty** schema from a `prisma db push`-managed one:
+outside production a database that has every core table but no
+`_prisma_migrations` history logs a warning and starts, which is what keeps the
+local Quick Start (`prisma db push`) working. In production that same state is a
+hard failure, because the entrypoint migrates on every boot — missing history
+there means migrations were bypassed and the schema will drift from the
+migration history later deploys are applied against.
 
 Note the gateway URL (e.g., `https://x402-gateway.up.railway.app`).
 
@@ -125,14 +133,23 @@ GW=https://your-gateway.up.railway.app
 curl -s "$GW/health/ready"
 
 # 2. The unpaid flow must return 402 with a usable status URL.
+#    Needs a configured route — see the note below the snippet.
 curl -s -X POST "$GW/api/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 Read the 402 body: `statusUrl` must be the **public** URL you set in
 `PUBLIC_GATEWAY_URL`. If it shows `http://0.0.0.0:3000/...`, the variable is not
 set and every paying client receives a status link they cannot poll.
+
+> **Step 2 requires a route, and none exists until Part 3.** On a freshly
+> deployed gateway it answers
+> `404 {"message":"No route configured for model: gpt-4"}`. That is the expected
+> pre-Part-3 response, not a deploy failure — step 1 already proved the
+> deployment is healthy. Re-run step 2 after creating the route in Part 3, using
+> the same `model`; the pass condition is a `402` whose `statusUrl` is your
+> public URL.
 
 Optionally, prove the whole wiring locally before spending time on hosting —
 this boots Postgres, Redis and the gateway and asserts the dashboard's own API
@@ -149,6 +166,7 @@ pnpm e2e:dashboard
 | Container exits; log says `Database schema is not migrated`       | Migrations failed, or were disabled                                                             | Leave `RUN_MIGRATIONS_ON_START` at its default (`true`), or run `pnpm db:migrate:deploy` against the production DB                |
 | `/health/ready` returns **503** with `database` failed            | `DATABASE_URL` doesn't reference the Postgres service                                           | Set it to `${{Postgres.DATABASE_URL}}`                                                                                            |
 | 402 body has `statusUrl: http://0.0.0.0:3000/...`                 | `PUBLIC_GATEWAY_URL` unset                                                                      | Set it to the public gateway URL                                                                                                  |
+| Proxy answers **404** `No route configured for model: X`          | No route is registered for that `model`, or the request's `model` doesn't match the route's     | Create a provider and a route with that `model` (Part 3). Before Part 3 this is the expected response, not a failure              |
 | Dashboard stuck on `Connecting...` / metrics stuck at `...`       | `NEXT_PUBLIC_GATEWAY_URL` missing from the Vercel build, or the gateway isn't browser-reachable | Verify the gateway above, set the variable in Vercel, then **redeploy** — it is inlined at build time, so a redeploy is mandatory |
 | Browser console reports a CORS error                              | The dashboard's origin isn't in the gateway's allow-list                                        | Add it to `CORS_ORIGINS` (comma-separated), e.g. `https://your-dashboard.vercel.app`                                              |
 | `NEXT_PUBLIC_GATEWAY_URL` set in Vercel but the site is unchanged | The value is baked in at build time; an existing deployment keeps the old bundle                | Trigger a new deployment                                                                                                          |
