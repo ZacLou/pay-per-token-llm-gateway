@@ -73,6 +73,33 @@ Proxy trust is **off by default**: `TRUST_PROXY` must be set explicitly (e.g.
 A directly-exposed gateway therefore ignores `X-Forwarded-For` entirely, and a
 production start with it unset logs a prominent warning.
 
+### Payout concurrency (no double payouts)
+
+Provider payouts are proposed against a `PayoutProposal` ledger. Pending
+revenue is `sum(confirmed payments) − sum(reserving proposals)`, and the row
+that _reserves_ it is written after an on-chain round-trip — so two writers
+that interleave inside that window both read the same reserved total and both
+reserve the whole balance. With a threshold-1 multisig wallet both proposals
+auto-execute and the provider is paid twice for one revenue stream.
+
+Both writers therefore serialise on a **per-provider Redis lock**
+(`x402:lock:payout-propose:<providerId>`, `SET NX` + TTL, released with a
+compare-and-delete Lua script so only the owner can release it):
+
+- the daily payout `@Cron`, which NestJS fires in **every** replica — the
+  Kubernetes manifest runs 2 gateway replicas and scaling up is the documented
+  way to add capacity;
+- `POST /api/v1/admin/payouts/propose`, where a double-submit or a client
+  retry after a timeout repeats the read-modify-write.
+
+Because the key is per provider, the two callers exclude each other and
+unrelated providers remain independent. The guard **fails closed**: if the
+lock cannot be acquired (Redis unreachable) the proposal is refused —
+`409` when another proposal for that provider is already in flight, `503` when
+the coordination store is unavailable. A refused proposal loses nothing (the
+revenue stays `confirmed` and is proposed later); a duplicate one moves money
+no revenue backs.
+
 ### Key Management
 
 - Upstream LLM API keys are environment variables: `UPSTREAM_API_KEY_<PROVIDER_ID>`
@@ -121,9 +148,9 @@ mainnet go/no-go path or consciously deferred — see
 [`MAINNET_READINESS.md`](./MAINNET_READINESS.md) for the full gate.
 
 1. **Soroban contracts are not independently audited.** payment-verifier,
-   credit-escrow, and multisig are self-tested only (23 / 43 / 32 unit tests,
-   no external review). An independent audit is required before handling real
-   USDC on mainnet.
+   credit-escrow, and multisig are self-tested only (29 / 46 / 36 unit tests —
+   111 total, verified 2026-09-14 with rustc 1.98.1 — and no external review).
+   An independent audit is required before handling real USDC on mainnet.
 2. **Per-IP rate limiting for unpaid requests.** The paid tier is now keyed by
    the verified payer wallet, but the unpaid 402 tier is still keyed by client IP
    — callers behind a shared NAT or rotating addresses can spread unpaid quote
@@ -151,6 +178,28 @@ mainnet go/no-go path or consciously deferred — see
 8. **Quote front-running is griefing-only.** A third party can pay a victim's
    quote first (the attacker loses real funds; the victim re-quotes). Memo
    enforcement is deliberately off.
+9. ~~**`init()` could be front-run between deploy and initialization**~~ —
+   **fixed 2026-09-14.** Initialization is now a Soroban `__constructor`, so it
+   runs inside the `deploy` transaction and there is no window in which anyone
+   else could initialize a freshly created contract with their own `admin` or
+   single-signer set. The separate `init` entry point was **removed from all
+   three contracts** rather than kept as a legacy path, so an instance can no
+   longer be initialized after deployment at all.
+
+   This is worth recording because the obvious fix does not work: adding
+   `admin.require_auth()` to `init` would not have helped — the address is a
+   caller-supplied parameter, so an attacker names _and signs_ their own, and
+   `require_auth` only ever proves the caller controls the address they
+   supplied, never that they are the deployer. Moving initialization into the
+   constructor is what actually closes the hole; as a side benefit it also
+   removes the "deployed but never initialized" failure mode, since a contract
+   whose constructor rejects its arguments now fails the deploy outright.
+
+   `scripts/deploy-contracts.sh` passes each contract's constructor arguments
+   to `stellar contract deploy` (`-- <args>`), so deploy + initialize remain a
+   single transaction operationally. Contract tests were updated accordingly
+   (111 pass); there is no on-chain state to migrate, so the next deployment
+   simply uses the new path.
 
 ## Security Checklist for Production
 

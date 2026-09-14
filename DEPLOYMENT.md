@@ -231,8 +231,11 @@ The gateway verifies the payment on-chain and proxies to the LLM:
 
 The gateway reads its contract IDs from environment variables, so the
 contracts must be deployed and initialized on mainnet before the gateway
-starts. `scripts/deploy-contracts.sh` handles build, deploy, `init`, and
-persisting the new IDs to `contracts/deployed-addresses.json`:
+starts. `scripts/deploy-contracts.sh` handles the build, the deploy, and the
+initialization — the constructor arguments are passed to
+`stellar contract deploy`, so deploy + init are a **single transaction** and
+there is no `init` gap for anyone to race — then persists the new IDs to
+`contracts/deployed-addresses.json`:
 
 ```bash
 STELLAR_NETWORK=mainnet \
@@ -398,6 +401,13 @@ Executed against Stellar Testnet with a freshly friendbot-funded account
 (stellar CLI 28.0.0, soroban-sdk 22, Rust 1.98.1). All three contracts were
 **deployed fresh, initialized, and exercised live**; the artifacts are still
 on testnet:
+
+> **Historical note.** This run predates the 2026-09-14 change that moved
+> initialization into a Soroban `__constructor` and removed the `init` entry
+> point from all three contracts. Rows below that read `init(admin)` or
+> "Deploy + init …" record the two-transaction flow **as it was at the time**;
+> those steps now happen inside `stellar contract deploy`. The contract IDs and
+> WASM sizes below belong to the superseded build.
 
 | Step                           | Result          | Evidence                                                                                                                 |
 | ------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------ |

@@ -94,18 +94,17 @@
 
 ### 3.3 Smart contracts
 
-| #   | Threat                                                             | Impact                                            | Vector                            | Mitigation                                                                                                                                    | Status                        |
-| --- | ------------------------------------------------------------------ | ------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| C1  | **Unauthorized `record_payment` / `refund` / `set_admin` / pause** | Fake audit trail, refund abuse                    | Unsigned calls                    | `config.admin.require_auth()` on every mutator; tested                                                                                        | ✅ mitigated                  |
-| C2  | **Re-init takeover** (`init` called twice)                         | Contract drained / rewritten                      | Second `init` with attacker admin | `init` panics if CONFIG exists; tested on all three contracts                                                                                 | ✅ mitigated                  |
-| C3  | **Multisig single-signer takeover / drain**                        | Wallet drained                                    | Rotate signers with 1 key         | `set_signers` requires current-threshold distinct approvers, each `require_auth`'d; duplicate approvers count once; tested incl. 2-of-3 cases | ✅ mitigated                  |
-| C4  | **Multisig duplicate-signer set**                                  | One key dominates                                 | `init`/`set_signers` with dupes   | `has_unique_signers` rejects; tested                                                                                                          | ✅ mitigated                  |
-| C5  | **Escrow balance underflow / over-withdraw**                       | User funds stolen                                 | Arithmetic on balances            | `current < amount` panics on `withdraw`/`charge`/`refund`; positive-amount checks everywhere                                                  | ✅ mitigated                  |
-| C6  | **Double-charge / double-refund of a quote**                       | User funds stolen                                 | Replayed settlement               | Per-(user, quote_id) `CHARGED`/`REFUNDED` guards; tested                                                                                      | ✅ mitigated                  |
-| C7  | **Gas-DoS via unbounded reads**                                    | Contract unusable                                 | `get_payments(0, u32::MAX)`       | `limit` clamped to `MAX_PAGE_SIZE` (100); `saturating_add` prevents overflow; tested                                                          | ✅ mitigated                  |
-| C8  | **TTL/rent abuse**                                                 | Contract archived, or reads keep it alive forever | Spam reads                        | Mutators extend instance + per-entry TTLs to `LEDGERS_TO_LIVE`; reads never extend TTL; tested                                                | ✅ mitigated                  |
-| C9  | **Zero/negative amounts recorded**                                 | Corrupt audit trail                               | Malformed args                    | `amount <= 0` panics; tested                                                                                                                  | ✅ mitigated                  |
-| C10 | **Revenue/refund accounting drift**                                | Admin withdraws wrong amounts                     | charge/refund sequences           | Revenue scalar tracks charged-only funds; invariant tests cover deposit→charge→refund→withdraw paths                                          | ✅ mitigated (contract tests) |
+| #   | Threat                                                             | Impact                                            | Vector                          | Mitigation                                                                                                                                    | Status                        |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| C1  | **Unauthorized `record_payment` / `refund` / `set_admin` / pause** | Fake audit trail, refund abuse                    | Unsigned calls                  | `config.admin.require_auth()` on every mutator; tested                                                                                        | ✅ mitigated                  |     | C2  | **Re-init takeover**                                                  | Contract drained / rewritten                     | Second initialization with attacker admin                                         | Initialization is a `__constructor` that runs inside `deploy`, so it executes exactly once and there is no `init` entry point to call again; tested on all three contracts                                                                                                                                            | ✅ mitigated              |
+| C3  | **Multisig single-signer takeover / drain**                        | Wallet drained                                    | Rotate signers with 1 key       | `set_signers` requires current-threshold distinct approvers, each `require_auth`'d; duplicate approvers count once; tested incl. 2-of-3 cases | ✅ mitigated                  |
+| C4  | **Multisig duplicate-signer set**                                  | One key dominates                                 | `init`/`set_signers` with dupes | `has_unique_signers` rejects; tested                                                                                                          | ✅ mitigated                  |
+| C5  | **Escrow balance underflow / over-withdraw**                       | User funds stolen                                 | Arithmetic on balances          | `current < amount` panics on `withdraw`/`charge`/`refund`; positive-amount checks everywhere                                                  | ✅ mitigated                  |
+| C6  | **Double-charge / double-refund of a quote**                       | User funds stolen                                 | Replayed settlement             | Per-(user, quote_id) `CHARGED`/`REFUNDED` guards; tested                                                                                      | ✅ mitigated                  |
+| C7  | **Gas-DoS via unbounded reads**                                    | Contract unusable                                 | `get_payments(0, u32::MAX)`     | `limit` clamped to `MAX_PAGE_SIZE` (100); `saturating_add` prevents overflow; tested                                                          | ✅ mitigated                  |
+| C8  | **TTL/rent abuse**                                                 | Contract archived, or reads keep it alive forever | Spam reads                      | Mutators extend instance + per-entry TTLs to `LEDGERS_TO_LIVE`; reads never extend TTL; tested                                                | ✅ mitigated                  |
+| C9  | **Zero/negative amounts recorded**                                 | Corrupt audit trail                               | Malformed args                  | `amount <= 0` panics; tested                                                                                                                  | ✅ mitigated                  |
+| C10 | **Revenue/refund accounting drift**                                | Admin withdraws wrong amounts                     | charge/refund sequences         | Revenue scalar tracks charged-only funds; invariant tests cover deposit→charge→refund→withdraw paths                                          | ✅ mitigated (contract tests) |     | C11 | **First-`init` front-run** (deploy and init as separate transactions) | Attacker owns the contract (admin / sole signer) | Call `init` before the deployer, with attacker-owned `admin` or single-signer set | Made structurally impossible: initialization is a Soroban `__constructor`, which executes _inside_ the deploy transaction, and the `init` entry point was removed from all three contracts. Note `require_auth()` on the caller-supplied `admin` would **not** have fixed this (the attacker signs their own address) | ✅ mitigated (2026-09-14) |
 
 ### 3.4 Dependencies & supply chain
 
@@ -120,29 +119,35 @@
 1. **Contracts are self-tested, not externally audited.** No third-party audit
    has reviewed the three Soroban contracts. This is the #1 mainnet gate
    (`MAINNET_READINESS.md` §1).
-2. **Unpaid rate limiting is IP-based.** The paid tier is keyed by the
+2. **Contract initialization is atomic** (C11 was fixed 2026-09-14):
+   initialization moved into a `__constructor` and the `init` entry point was
+   removed from all three contracts, so there is no deploy→init gap to race.
+   Deployers must pass constructor arguments to `stellar contract deploy`
+   (`scripts/deploy-contracts.sh` does this); a contract deployed without them
+   is permanently unusable rather than takeover-able.
+3. **Unpaid rate limiting is IP-based.** The paid tier is keyed by the
    verified payer wallet, but unpaid 402 spam is still limited per client IP.
    `TRUST_PROXY` is off by default so a directly-exposed gateway ignores
    `X-Forwarded-For`; set it explicitly only when a trusted reverse proxy is
    actually in front.
-3. **Quote front-running is griefing-only** (P8): a third party can pay
+4. **Quote front-running is griefing-only** (P8): a third party can pay
    someone's quote first, costing the attacker real funds; the victim
    re-quotes. Memo enforcement is deliberately off.
-4. **Cross-provider debt hopping** (P10): a payer with debt on provider A can
+5. **Cross-provider debt hopping** (P10): a payer with debt on provider A can
    use provider B. Per-provider trust model.
-5. **Dev/build-tooling advisories remain** (2 high, both `image-size` — no
+6. **Dev/build-tooling advisories remain** (2 high, both `image-size` — no
    patched release exists; unused `@nx/vite`→less chain). Build-time only, no
    runtime-reachable path; tracked in `MAINNET_READINESS.md` §7.
-6. **Soroban gas/storage benchmarks are executed and gated in CI.**
+7. **Soroban gas/storage benchmarks are executed and gated in CI.**
    `src/bench.rs` in each contract measures fee/entry costs at growing
    history sizes and asserts the O(1) invariant (see
    [`GAS-OPTIMIZATION.md`](./GAS-OPTIMIZATION.md) §5.5 for the 2026-09-08
    results ledger: fee flat 1.004×–1.009×, entries byte-identical); CI also
    gates contract WASM size (< 64 KiB).
-7. **Restore-from-archive semantics**: persistent entries not written for
+8. **Restore-from-archive semantics**: persistent entries not written for
    `LEDGERS_TO_LIVE` ledgers require a paid archive restore to read
    (audit-trail durability tradeoff).
-8. **Escrow settlement is opt-in/experimental** — fire-and-forget, not
+9. **Escrow settlement is opt-in/experimental** — fire-and-forget, not
    enforced without the account model.
 
 ## 5. Assumptions

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BadRequestException,
+  ConflictException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -57,6 +58,13 @@ const mockGetMultisigConfig = jest.requireMock('../x402/multisig-client')
 
 const OWNER = 'GA5ZSE6VKPVFLEXMWJQBGHE4FJHKQIFSJMLQ7H4VFQB4UHLEH5IOVK3F';
 
+// Minimal Redis double for the per-provider payout lock: `set` is the
+// `SET NX` claim, `eval` is the compare-and-delete release.
+const mockRedis = {
+  set: jest.fn(),
+  eval: jest.fn(),
+};
+
 describe('AdminService', () => {
   let service: AdminService;
 
@@ -67,7 +75,9 @@ describe('AdminService', () => {
     // resetAllMocks (not just clear) so mockResolvedValueOnce queues from one
     // test never leak into the next.
     jest.resetAllMocks();
-    service = new AdminService();
+    service = new AdminService(mockRedis as never);
+    mockRedis.set.mockResolvedValue('OK');
+    mockRedis.eval.mockResolvedValue(1);
 
     // Default: payout automation enabled with an admin secret so the
     // happy-path tests exercise the real orchestration flow.
@@ -508,6 +518,109 @@ describe('AdminService', () => {
           service.proposePayout(OWNER_PAYOUT, { providerId: 'provider-other' }),
         ).rejects.toThrow(NotFoundException);
         expect(mockProposeMultisig).not.toHaveBeenCalled();
+      });
+
+      // ── Per-provider double-proposal guard ──
+      //
+      // Pending revenue is a read-modify-write whose write happens after an
+      // on-chain round-trip. A double-submitted or client-retried request
+      // otherwise reads the same reserved total twice and proposes the same
+      // revenue twice — executed on both if the wallet threshold is 1 — and
+      // the daily cron writes the same ledger through the same key.
+
+      describe('payout lock', () => {
+        const PAYOUT_WALLET = 'GBPROVIDERPAYOUT1234567890PAYOUT1234567890PAYOUT1';
+
+        function ownedProvider() {
+          (mockPrisma.provider.findFirst as jest.Mock).mockResolvedValue({
+            id: 'provider-1',
+            walletAddress: OWNER_PAYOUT,
+            payoutWalletAddress: PAYOUT_WALLET,
+          });
+        }
+
+        it('claims the per-provider lock before reading pending revenue', async () => {
+          ownedProvider();
+          (mockPrisma.payment.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: 0n } });
+          (mockPrisma.payoutProposal.aggregate as jest.Mock).mockResolvedValue({
+            _sum: { amount: 0n },
+          });
+
+          // No revenue to pay, so it stops after the read — but the claim must
+          // already have happened, and it must be the per-provider key.
+          await expect(
+            service.proposePayout(OWNER_PAYOUT, { providerId: 'provider-1' }),
+          ).rejects.toThrow(BadRequestException);
+
+          expect(mockRedis.set).toHaveBeenCalledWith(
+            'x402:lock:payout-propose:provider-1',
+            expect.any(String),
+            'EX',
+            120,
+            'NX',
+          );
+          expect(mockRedis.set.mock.invocationCallOrder[0]).toBeLessThan(
+            mockPrisma.payment.aggregate.mock.invocationCallOrder[0],
+          );
+        });
+
+        it('returns 409 and reads nothing when a proposal is already in progress', async () => {
+          ownedProvider();
+          mockRedis.set.mockResolvedValue(null); // NX rejected — key already held
+
+          await expect(
+            service.proposePayout(OWNER_PAYOUT, { providerId: 'provider-1' }),
+          ).rejects.toThrow(ConflictException);
+
+          // The revenue read is the operation the lock protects.
+          expect(mockPrisma.payment.aggregate).not.toHaveBeenCalled();
+          expect(mockPrisma.payoutProposal.create).not.toHaveBeenCalled();
+          expect(mockProposeMultisig).not.toHaveBeenCalled();
+          // It never owned the lock, so it must not delete it.
+          expect(mockRedis.eval).not.toHaveBeenCalled();
+        });
+
+        it('fails closed with 503 when the lock cannot be acquired (Redis down)', async () => {
+          ownedProvider();
+          mockRedis.set.mockRejectedValue(new Error('ECONNREFUSED'));
+
+          await expect(
+            service.proposePayout(OWNER_PAYOUT, { providerId: 'provider-1' }),
+          ).rejects.toThrow(ServiceUnavailableException);
+
+          expect(mockPrisma.payoutProposal.create).not.toHaveBeenCalled();
+          expect(mockProposeMultisig).not.toHaveBeenCalled();
+        });
+
+        it('releases the lock when the on-chain proposal fails', async () => {
+          ownedProvider();
+          (mockPrisma.payment.aggregate as jest.Mock).mockResolvedValue({
+            _sum: { amount: 10_000_000n },
+          });
+          (mockPrisma.payoutProposal.aggregate as jest.Mock).mockResolvedValue({
+            _sum: { amount: 0n },
+          });
+          (mockPrisma.payoutProposal.create as jest.Mock).mockResolvedValue({
+            id: 'payout-1',
+            providerId: 'provider-1',
+            destination: PAYOUT_WALLET,
+            amount: 10_000_000n,
+          });
+          (mockPrisma.payoutProposal.update as jest.Mock).mockResolvedValue({});
+          mockProposeMultisig.mockResolvedValue({ success: false, error: 'RPC down' });
+
+          await expect(
+            service.proposePayout(OWNER_PAYOUT, { providerId: 'provider-1' }),
+          ).rejects.toThrow(ServiceUnavailableException);
+
+          const token = mockRedis.set.mock.calls[0][1];
+          expect(mockRedis.eval).toHaveBeenCalledWith(
+            expect.stringContaining("redis.call('DEL'"),
+            1,
+            'x402:lock:payout-propose:provider-1',
+            token,
+          );
+        });
       });
     });
 

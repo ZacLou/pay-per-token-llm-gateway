@@ -174,8 +174,9 @@ Cloudflare/NGINX (TLS, trusted proxy)
 - CI: lint → test (coverage-gated) → e2e → contracts (`cargo test`) →
   build → security scans (audit/gitleaks/trivy/osv-scanner).
 - Deploy (tag `v*`): gated on green CI, pushes images, deploys Soroban
-  contracts to testnet with `init` + address persistence, and attaches a
-  CycloneDX SBOM to the release.
+  contracts to testnet (initialized atomically via each contract's
+  `__constructor` arguments) + address persistence, and attaches a CycloneDX
+  SBOM to the release.
 
 ## 9. Data flows of note
 

@@ -141,7 +141,7 @@ The Soroban SDK test environment exposes per-invocation resource usage:
 ```rust
 // In any contract test:
 let env = Env::default();
-// ... deploy, init ...
+// ... deploy (constructor args initialize atomically) ...
 let invoke = env.invoke_contract::<…>(&contract_id, "record_payment", …);
 let usage = env.ledger().get_invocation_usage(); // CPU + memory + storage entries
 let fee = usage.compute_fee();                   // XLM fee estimate

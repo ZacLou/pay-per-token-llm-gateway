@@ -139,11 +139,23 @@ pub struct PaymentVerifier;
 
 #[contractimpl]
 impl PaymentVerifier {
-    pub fn init(env: Env, admin: Address) {
+    /// Atomic initialization — runs inside the `deploy` transaction.
+    ///
+    /// Initialization lives in a constructor rather than a post-deploy `init`
+    /// entry point on purpose. `stellar contract deploy` and a separate `init`
+    /// call are two different transactions, and in the gap between them anyone
+    /// could call `init` first with their own `admin` — taking ownership of a
+    /// contract the deployer had just created and gaining the ability to
+    /// rewrite the audit trail. Requiring auth on `init` does not close that
+    /// hole, because the address is caller-supplied: an attacker simply names
+    /// and signs their own. A constructor executes as part of deployment, so
+    /// no such window exists, and it also removes the older "deployed but
+    /// never initialized" failure mode.
+    ///
+    /// The previous `already initialized` guard is intentionally gone: a
+    /// constructor cannot run twice, so it would be dead code.
+    pub fn __constructor(env: Env, admin: Address) {
         extend_ttl(&env);
-        if env.storage().instance().has(&CONFIG_KEY) {
-            panic!("Contract already initialized");
-        }
         let config = ContractConfig {
             admin,
             paused: false,
@@ -325,9 +337,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -357,9 +368,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -394,9 +404,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -453,9 +462,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -491,9 +499,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -528,9 +535,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -555,9 +561,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -591,9 +596,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -621,9 +625,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -644,15 +647,13 @@ mod test {
 
     #[test]
     fn test_ttl_extended_after_init() {
-        // The network default persistent TTL is only ~4096 ledgers. `init`
-        // must explicitly extend the instance + code TTL far past that, or
-        // the contract would be archived within hours.
+        // The network default persistent TTL is only ~4096 ledgers. The
+        // constructor must explicitly extend the instance + code TTL far past
+        // that, or the contract would be archived within hours.
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
-        let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
+        let contract_id = env.register(PaymentVerifier, (&admin,));
 
         // Storage access from tests must run in the contract's context.
         let ttl = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
@@ -670,9 +671,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -713,9 +713,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -768,9 +767,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -809,20 +807,40 @@ mod test {
     // ── Pause / admin transfer / refund edge cases ──
 
     #[test]
-    #[should_panic(expected = "Contract already initialized")]
-    fn test_double_init_rejected() {
-        // A second init would let an attacker replace the admin and rewrite
-        // the audit trail — it must be rejected, mirroring the other
-        // contracts' takeover guard.
+    fn test_constructor_initializes_atomically() {
+        // Initialization runs inside `env.register`, which is what the
+        // `deploy` transaction performs. There is therefore no separate
+        // `init` call, and no window in which anyone else could make one:
+        // the contract is configured the moment it exists.
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
+        // Usable immediately — the deployer never sent a second transaction.
+        assert_eq!(client.total_payments(), 0u32);
+
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        client.mock_all_auths().record_payment(
+            &String::from_str(&env, "ctor-1"),
+            &payer,
+            &payee,
+            &100_000_000i128,
+            &String::from_str(&env, "USDC"),
+            &1_712_345_678u64,
+            &String::from_str(&env, "quote-ctor"),
+        );
+        assert!(client.is_payment_used(&String::from_str(&env, "ctor-1")));
+
+        // A second deployment with an attacker-chosen admin is a *different*
+        // contract; it cannot take over this one, and it cannot
+        // re-initialize it either (there is no init entry point at all).
         let attacker = Address::generate(&env);
-        client.init(&attacker);
+        let other = env.register(PaymentVerifier, (&attacker,));
+        assert_ne!(contract_id, other);
+        assert!(client.is_payment_used(&String::from_str(&env, "ctor-1")));
     }
 
     #[test]
@@ -833,9 +851,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
         client.mock_all_auths().set_paused(&true);
 
         let payer = Address::generate(&env);
@@ -857,9 +874,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
         client.mock_all_auths().set_paused(&true);
 
         client.mock_all_auths().refund_payment(
@@ -875,9 +891,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         client.mock_all_auths().set_paused(&true);
         client.mock_all_auths().set_paused(&false);
@@ -907,9 +922,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -932,9 +946,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         client.mock_all_auths().refund_payment(
             &String::from_str(&env, "never-recorded"),
@@ -950,9 +963,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -982,9 +994,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
@@ -1020,9 +1031,8 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         let missing = String::from_str(&env, "missing");
         assert_eq!(client.get_payment(&missing), None);
@@ -1038,9 +1048,8 @@ mod test {
         let admin = Address::generate(&env);
         let new_admin = Address::generate(&env);
 
-        let contract_id = env.register(PaymentVerifier, ());
+        let contract_id = env.register(PaymentVerifier, (&admin,));
         let client = PaymentVerifierClient::new(&env, &contract_id);
-        client.init(&admin);
 
         // No admin signature → transfer rejected.
         let unauthorized = client.try_set_admin(&new_admin);

@@ -206,10 +206,10 @@ jobs:
           sudo mv /tmp/stellar /usr/local/bin/stellar
           stellar --version
 
-      # Builds → deploys → initializes every contract (init admin/asset/
-      # threshold args are contract-specific) → writes the new IDs to
-      # contracts/deployed-addresses.json. Skips gracefully when
-      # STELLAR_SECRET_KEY is not set.
+      # Builds → deploys + initializes every contract in one transaction
+      # (constructor admin/asset/signers/threshold args are contract-specific)
+      # → writes the new IDs to contracts/deployed-addresses.json. Skips
+      # gracefully when STELLAR_SECRET_KEY is not set.
       - name: Deploy & initialize contracts
         run: bash scripts/deploy-contracts.sh
         env:

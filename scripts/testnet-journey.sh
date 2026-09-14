@@ -14,7 +14,9 @@
 # table. Any unexpected HTTP status fails the run.
 #
 # Requirements: docker (running), node, pnpm, network access to the Stellar
-# Testnet (Horizon + friendbot + Soroban RPC).
+# Testnet (Horizon + friendbot + Soroban RPC). The optional provider-payout
+# leg (#40) additionally needs the `stellar` CLI, which deploys the multisig
+# with its constructor arguments (see scripts/testnet-payout.ts).
 #
 # Usage: bash scripts/testnet-journey.sh
 #
@@ -167,10 +169,11 @@ if [ $JOURNEY_EXIT -ne 0 ]; then
 fi
 
 # ── 8. Provider payout leg (#40) — optional, requires the multisig wasm ──
-# Deploys a FRESH threshold-1 multisig, funds it with the journey USDC,
-# restarts the gateway with PAYOUT_AUTOMATION_ENABLED=true + the new
-# MULTISIG_CONTRACT, then drives the admin payout flow and verifies the
-# on-chain transfer. Skipped when the multisig wasm is not built.
+# Deploys a FRESH threshold-1 multisig (constructor args, via the `stellar`
+# CLI), funds it with the journey USDC, restarts the gateway with
+# PAYOUT_AUTOMATION_ENABLED=true + the new MULTISIG_CONTRACT, then drives the
+# admin payout flow and verifies the on-chain transfer. Skipped when the
+# multisig wasm is not built.
 if [ -f "contracts/multisig/target/wasm32-unknown-unknown/release/multisig.wasm" ]; then
   log "Running provider payout leg (#40)"
 

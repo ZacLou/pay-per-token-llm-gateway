@@ -25,9 +25,8 @@ fn setup_env(threshold: u32) -> (Env, Address, Vec<Address>, MultisigClient<'sta
     for _ in 0..threshold {
         signers.push_back(Address::generate(&env));
     }
-    let contract_id = env.register(Multisig, ());
+    let contract_id = env.register(Multisig, (signers.clone(), threshold, token.clone()));
     let client = MultisigClient::new(&env, &contract_id);
-    client.init(&signers, &threshold, &token);
     (env, token, signers, client)
 }
 

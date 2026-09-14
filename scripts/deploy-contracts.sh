@@ -10,9 +10,14 @@
 #
 # For each contract this script:
 #   1. Builds the wasm (stellar contract build)
-#   2. Deploys it (stellar contract deploy) and captures the contract ID
-#   3. Calls `init` with the correct arguments for that contract
-#   4. Merges the new IDs into contracts/deployed-addresses.json per network
+#   2. Deploys AND initializes it in a single transaction, by passing the
+#      constructor arguments to `stellar contract deploy` (after `--`).
+#      Initialization is a Soroban `__constructor`, so there is no separate
+#      `init` transaction. That matters for security, not just tidiness: when
+#      deploy and init were two transactions, anyone could call `init` first
+#      with their own admin (or their own single-signer set) and take over a
+#      contract the deployer had just created.
+#   3. Merges the new IDs into contracts/deployed-addresses.json per network
 #
 # Usage:
 #   STELLAR_SECRET_KEY=S... bash scripts/deploy-contracts.sh
@@ -117,13 +122,17 @@ SIGNERS_JSON="$(printf '%s\n' "$MULTISIG_SIGNERS" | sed 's/, */,/g' | sed 's/,/\
 
 # Deploy a wasm file and echo the resulting contract ID.
 #
+# Any further arguments are passed to the contract's `__constructor` (after
+# `--`), so deployment and initialization happen in one transaction.
+#
 # IMPORTANT: progress/log lines go to STDERR so that only the contract ID
 # lands on stdout — the caller captures stdout via $(...) and must receive
 # exactly one clean ID.
 deploy_contract() {
   local name="$1"
   local wasm="$2"
-  echo "── Deploying ${name} ──" >&2
+  shift 2
+  echo "── Deploying ${name} (constructor args: $*) ──" >&2
   local out_file err_file id
   out_file="$(mktemp)"
   err_file="$(mktemp)"
@@ -133,7 +142,8 @@ deploy_contract() {
   if ! stellar contract deploy \
     --wasm "$wasm" \
     --source-account "$STELLAR_SECRET_KEY" \
-    --network "$STELLAR_NETWORK" >"$out_file" 2>"$err_file"; then
+    --network "$STELLAR_NETWORK" \
+    -- "$@" >"$out_file" 2>"$err_file"; then
     echo "❌ 'stellar contract deploy' failed for ${name}. Output:" >&2
     cat "$err_file" >&2
     cat "$out_file" >&2
@@ -152,20 +162,6 @@ deploy_contract() {
   echo "$id"
 }
 
-# Invoke `init` on a deployed contract (pass remaining args after `--`).
-invoke_init() {
-  local name="$1"
-  local id="$2"
-  shift 2
-  echo "── Initializing ${name} (${id}) ──"
-  stellar contract invoke \
-    --id "$id" \
-    --source-account "$STELLAR_SECRET_KEY" \
-    --network "$STELLAR_NETWORK" \
-    -- init "$@"
-  echo "✅ ${name} initialized"
-}
-
 # ── Build, deploy, and initialize each contract ──
 
 CONTRACTS_DIR="${CONTRACTS_DIR:-${ROOT_DIR}/contracts}"
@@ -174,12 +170,29 @@ PAYMENT_VERIFIER_ID=""
 CREDIT_ESCROW_ID=""
 MULTISIG_ID=""
 
+# Constructor arguments are supplied per contract and passed through to
+# `stellar contract deploy`, so each contract is initialized atomically as it
+# is deployed. A contract whose constructor rejects its arguments fails the
+# deploy outright, rather than leaving an uninitialized instance behind.
 for contract in payment-verifier credit-escrow multisig; do
   echo ""
   echo "════════ ${contract} ════════"
   (cd "${CONTRACTS_DIR}/${contract}" && stellar contract build)
   wasm="${CONTRACTS_DIR}/${contract}/target/wasm32-unknown-unknown/release/${contract//-/_}.wasm"
-  deployed_id="$(deploy_contract "$contract" "$wasm")"
+  case "$contract" in
+    payment-verifier)
+      deployed_id="$(deploy_contract "$contract" "$wasm" \
+        --admin "$ADMIN_ADDRESS")" ;;
+    credit-escrow)
+      deployed_id="$(deploy_contract "$contract" "$wasm" \
+        --admin "$ADMIN_ADDRESS" \
+        --asset "$USDC_SAC_ID")" ;;
+    multisig)
+      deployed_id="$(deploy_contract "$contract" "$wasm" \
+        --signers "$SIGNERS_JSON" \
+        --threshold "$MULTISIG_THRESHOLD" \
+        --token "$USDC_SAC_ID")" ;;
+  esac
   case "$contract" in
     payment-verifier) PAYMENT_VERIFIER_ID="$deployed_id" ;;
     credit-escrow) CREDIT_ESCROW_ID="$deployed_id" ;;
@@ -188,19 +201,7 @@ for contract in payment-verifier credit-escrow multisig; do
 done
 
 echo ""
-echo "════════ Initializing contracts ════════"
-
-invoke_init "payment-verifier" "$PAYMENT_VERIFIER_ID" \
-  --admin "$ADMIN_ADDRESS"
-
-invoke_init "credit-escrow" "$CREDIT_ESCROW_ID" \
-  --admin "$ADMIN_ADDRESS" \
-  --asset "$USDC_SAC_ID"
-
-invoke_init "multisig" "$MULTISIG_ID" \
-  --threshold "$MULTISIG_THRESHOLD" \
-  --signers "$SIGNERS_JSON" \
-  --token "$USDC_SAC_ID"
+echo "════════ Contracts deployed and initialized atomically ════════"
 
 # ── Persist addresses to contracts/deployed-addresses.json ──
 

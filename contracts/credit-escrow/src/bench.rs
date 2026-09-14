@@ -26,9 +26,8 @@ fn setup_env() -> (Env, Address, Address, Address, CreditEscrowClient<'static>) 
     let token_admin = Address::generate(&env);
     let asset = env.register_stellar_asset_contract(token_admin.clone());
 
-    let contract_id = env.register(CreditEscrow, ());
+    let contract_id = env.register(CreditEscrow, (&admin, &asset));
     let client = CreditEscrowClient::new(&env, &contract_id);
-    client.init(&admin, &asset);
 
     (env, admin, token_admin, asset, client)
 }

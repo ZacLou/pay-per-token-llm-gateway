@@ -2,23 +2,29 @@
 
 > Curated issue set for **Stellar Wave (Drips)** & **GrantFox** submission — August 2026.
 > All 18 curated issues carry the `Stellar Wave` · `GrantFox OSS` · `Maybe Rewarded` · `bounty` labels.
-> Data reflects the **live GitHub issue state** (labels, status, and points pulled from the actual repo).
-> **Updated 2026-09-09** — 7 of 18 issues are now implemented and closed.
+> **Status below describes the implementation state in this repository
+> (verified against the code and test suite) — updated 2026-09-14: all 18
+> issues are implemented and closed.**
+>
+> The GitHub-side state (labels, milestone, the Drips/Wave point ledger) is
+> not reproducible from the source tree, so it is no longer asserted here; the
+> per-issue evidence lives in
+> [`.github/WAVE8_ISSUES.md`](.github/WAVE8_ISSUES.md).
 
 ---
 
 ## 📊 At a Glance
 
-| Metric                       | Value                                                       |
-| ---------------------------- | ----------------------------------------------------------- |
-| Curated issues               | **18** (10 original Wave-8 + 8 hardening/feature batch)     |
-| Open (up for grabs)          | **0**                                                       |
-| Implemented & closed         | **21** ✅                                                   |
-| Areas covered                | contracts, gateway, SDK, dashboard, notifications, database |
-| `good first issue` count     | **6**                                                       |
-| `security`-labeled count     | **4**                                                       |
-| Total points (open + closed) | **2,700**                                                   |
-| Total points (open only)     | **0**                                                       |
+| Metric                    | Value                                                       |
+| ------------------------- | ----------------------------------------------------------- |
+| Curated issues            | **18** (10 original Wave-8 + 8 hardening/feature batch)     |
+| Open                      | **0**                                                       |
+| Implemented & closed      | **18** ✅                                                   |
+| Areas covered             | contracts, gateway, SDK, dashboard, notifications, database |
+| `good first issue` count  | **6**                                                       |
+| `security`-labeled count  | **4**                                                       |
+| Total points (all issues) | **2,700**                                                   |
+| Total points (open only)  | **0**                                                       |
 
 **Point model:** High = 200 · Medium = 150 · Trivial = 100
 
@@ -73,12 +79,11 @@
 
 ## 🎯 Grouped by Difficulty
 
-| Difficulty        | Open  | Closed | Issue numbers                                              | Points    |
-| ----------------- | ----- | ------ | ---------------------------------------------------------- | --------- |
-| **High** (200)    | 0     | 3      | #25, #26, #40                                              | 600       |
-| **Medium** (150)  | 0     | 15     | #27, #28, #29, #30, #32, #33, #34, #41, #42, #43, #44, #45 | 2,250     |
-| **Trivial** (100) | 0     | 3      | #31, #46, #47                                              | 300       |
-| **Total**         | **0** | **21** | —                                                          | **2,700** |
+| Difficulty | Open | Closed | Issue numbers | Points |
+| ----------------- | ----- | ------ | ---------------------------------------------------------- | --------- || **High** (200) | 0 | 3 | #25, #26, #40 | 600 |
+| **Medium** (150) | 0 | 12 | #27, #28, #29, #30, #32, #33, #34, #41, #42, #43, #44, #45 | 1,800 |
+| **Trivial** (100) | 0 | 3 | #31, #46, #47 | 300 |
+| **Total** | **0** | **18**| — | **2,700** |
 
 ### 🌱 Quick wins (`good first issue`) — great onboarding entry points
 
@@ -87,7 +92,7 @@
 | ~~Enforce `minPaymentAmount`~~                     | [#31](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/31) | 100 |
 | ~~Populate route in payment receipts~~             | [#46](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/46) | 100 |
 | ~~Remove unused `Session`/`ApiKey` Prisma models~~ | [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47) | 100 |
-| SQL time-series bucketing (Medium)                 | [#44](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/44) | 150 |
+| ~~SQL time-series bucketing (Medium)~~             | [#44](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/44) | 150 |
 | SDK unit tests (Medium, closed)                    | [#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45) | 150 |
 | Dashboard unit tests (Medium, closed)              | [#32](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/32) | 150 |
 
@@ -103,6 +108,10 @@
 ---
 
 ## ✅ Implemented (closed) — proof of activity
+
+All 18 are closed; the table below records the tranche that closed first, and
+[`.github/WAVE8_ISSUES.md`](.github/WAVE8_ISSUES.md) carries the per-issue
+status for every one of them.
 
 | Issue                              | GitHub                                                                   | Commit / Date |
 | ---------------------------------- | ------------------------------------------------------------------------ | ------------- |
@@ -123,10 +132,10 @@
 | Bucket            | Points    |
 | ----------------- | --------- |
 | High (3 × 200)    | 600       |
-| Medium (15 × 150) | 2,250     |
+| Medium (12 × 150) | 1,800     |
 | Trivial (3 × 100) | 300       |
 | **Total**         | **2,700** |
-| — open only       | **1,550** |
+| — open only       | **0**     |
 
 ---
 
@@ -134,7 +143,7 @@
 
 - **Areas with full coverage:** Soroban contracts (5 issues), gateway (8 issues), SDK (2), dashboard (1), notifications (2).
 - **Bounty-ready:** every issue carries `bounty` for the Drips/Wave point ledger and is eligible for `Maybe Rewarded` GrantFox payouts on merge.
-- **Maturity signal:** 7 of 18 issues already implemented and closed — the repo is actively maintained, not a parked codebase.
+- **Maturity signal:** all 18 curated issues are implemented and closed — the repo is actively maintained, not a parked codebase.
 - **Onboarding funnel:** 6 `good first issue` tags (3 trivial + 3 medium) give newcomers a clear entry point while the remaining issues give experienced contributors meaningful scope.
 
 ---

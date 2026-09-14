@@ -34,11 +34,9 @@ jest.mock('@x402/config', () => ({
 }));
 
 import { prisma } from '@x402/database';
-import { getConfig } from '@x402/config';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockValidateWebhookUrl = validateWebhookUrl as jest.MockedFunction<typeof validateWebhookUrl>;
-const mockGetConfig = getConfig as jest.MockedFunction<typeof getConfig>;
 
 const WALLET = 'GCKVZERLXRNTD3TVAZQYKUGPH3FYPBRKLQ2IG7OBNEP5WPZTQQMAZTQX';
 const OTHER_WALLET = 'GBPYRN5EUXSUNA3XA5NURIKOFXRU37MHI777N5FZC7RWYOZAPCVBUUTF';

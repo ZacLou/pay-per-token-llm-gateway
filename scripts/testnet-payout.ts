@@ -33,6 +33,7 @@ import {
   Address,
   rpc,
 } from '@stellar/stellar-sdk';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'crypto';
 import { prisma } from '@x402/database';
 
@@ -51,6 +52,8 @@ const STATE_FILE = process.env.PAYOUT_STATE_FILE || '.testnet-journey/payout-sta
 /** "deploy" writes the fresh contract id + funds it; "run" proposes via the gateway. */
 const MODE = process.env.PAYOUT_MODE || 'run';
 const NETWORK_PASSPHRASE = Networks.TESTNET;
+/** Network name handed to the `stellar` CLI for the deploy step. */
+const STELLAR_NETWORK = process.env.STELLAR_NETWORK || 'testnet';
 
 if (!ISSUER_SECRET || !SIGNER_SECRET) {
   throw new Error('ISSUER_SECRET and PAYOUT_SIGNER_SECRET are required');
@@ -312,6 +315,65 @@ async function main() {
   await runPayout(fs);
 }
 
+/**
+ * Deploy the multisig with its constructor arguments via the `stellar` CLI,
+ * returning the new contract id.
+ *
+ * The contract's `__constructor(signers, threshold, token)` must be satisfied
+ * atomically at deploy time, and the `stellar` CLI is what passes those
+ * arguments through `stellar contract deploy -- <args>` — the same form
+ * `scripts/deploy-contracts.sh` uses. The bundled stellar-sdk 12.x predates
+ * the protocol-23 `CREATE_CONTRACT_V2` host function, so it cannot carry
+ * constructor arguments from TypeScript, which is why this step shells out.
+ */
+function deployMultisigContract(sacId: string): string {
+  const signersJson = JSON.stringify([signer.publicKey()]);
+  console.log(
+    `  deploying via stellar CLI (signer ${signer.publicKey().slice(0, 8)}..., threshold 1)`,
+  );
+
+  let out: string;
+  try {
+    out = execFileSync(
+      'stellar',
+      [
+        'contract',
+        'deploy',
+        '--wasm',
+        MULTISIG_WASM,
+        '--source-account',
+        SIGNER_SECRET,
+        '--network',
+        STELLAR_NETWORK,
+        '--',
+        '--signers',
+        signersJson,
+        '--threshold',
+        '1',
+        '--token',
+        sacId,
+      ],
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') {
+      throw new Error(
+        'the `stellar` CLI is required to deploy the multisig (constructor arguments ' +
+          'must be supplied at deploy time). Install it and re-run.',
+      );
+    }
+    const detail = err?.stderr?.toString?.() || err?.message || String(err);
+    throw new Error(`stellar contract deploy failed: ${detail}`);
+  }
+
+  const id = out.trim().split('\n').pop()?.trim() ?? '';
+  if (!StrKey.isValidContract(id)) {
+    throw new Error(`stellar CLI returned an unexpected contract id: ${JSON.stringify(out)}`);
+  }
+  console.log(`  multisig deployed: ${id}`);
+  return id;
+}
+
 /** Phase 1 — deploy + fund a fresh threshold-1 multisig; persist its id. */
 async function deployMultisig(fs: typeof import('fs')) {
   // ── 1. Fund the signer (XLM) ──
@@ -320,7 +382,13 @@ async function deployMultisig(fs: typeof import('fs')) {
   await friendbotFund(issuer.publicKey(), 'issuer');
 
   // ── 2. Deploy a fresh multisig bound to the journey USDC SAC ──
-  console.log('\n── Step 2: deploy + init fresh multisig (threshold 1) ──');
+  //
+  // Initialization is a Soroban `__constructor`, so it runs *inside* the
+  // deploy transaction: the signer set, threshold and token are constructor
+  // arguments, and there is no separate `init` entry point to call. The
+  // deploy therefore has to carry those arguments — see
+  // `deployMultisigContract` for why that goes through the `stellar` CLI.
+  console.log('\n── Step 2: deploy fresh multisig (threshold 1, constructor args) ──');
 
   // The SAC for the journey's classic USDC asset — deterministic address.
   const assetXdr = USDC_ASSET.toXDRObject();
@@ -331,98 +399,20 @@ async function deployMultisig(fs: typeof import('fs')) {
   );
   console.log(`  USDC SAC: ${sacId}`);
 
-  // The multisig id is deterministic (fixed salt + deployer address + network
-  // passphrase), which makes the deploy phase idempotent: a re-run reuses the
-  // existing contract. Protocol 23+ derives the id as
-  //   sha256(HashIdPreimage{ networkID, contractIDPreimage })
-  // which differs from the pre-protocol-23 plain preimage hash, so we derive
-  // it explicitly rather than simulating a create (which fails once the
-  // contract already exists).
-  const salt = Buffer.alloc(32, 7); // fixed, reproducible salt
-  const wasm = fs.readFileSync(MULTISIG_WASM);
-  const wasmHash = createHash('sha256').update(wasm).digest();
+  // Idempotent re-run: reuse the multisig recorded by a previous deploy phase
+  // rather than creating another contract (and another source of real USDC).
+  const priorState = fs.existsSync(STATE_FILE)
+    ? (JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) as { multisigId?: string })
+    : null;
 
-  const contractIdPreimage = xdr.ContractIdPreimage.contractIdPreimageFromAddress(
-    new xdr.ContractIdPreimageFromAddress({
-      address: Address.fromString(signer.publicKey()).toScAddress(),
-      salt,
-    }),
-  );
-  const networkId = createHash('sha256').update(NETWORK_PASSPHRASE).digest();
-  const idPreimage = xdr.HashIdPreimage.envelopeTypeContractId(
-    new xdr.HashIdPreimageContractId({
-      networkId,
-      contractIdPreimage,
-    }),
-  );
-  const multisigId = StrKey.encodeContract(
-    createHash('sha256').update(idPreimage.toXDR()).digest(),
-  );
-  console.log(`  multisig (deterministic): ${multisigId}`);
-
-  // Horizon `loadAccount` can't resolve contract accounts; query the RPC's
-  // ledger entries for the contract's WASM code instead (empty = not deployed).
-  let alreadyDeployed = false;
-  {
-    const contractCodeKey = xdr.LedgerKey.contractCode(
-      new xdr.LedgerKeyContractCode({ hash: wasmHash }),
-    );
-    try {
-      const entries: any = await rpcServer.getLedgerEntries(contractCodeKey);
-      alreadyDeployed = Array.isArray(entries?.entries) && entries.entries.length > 0;
-    } catch {
-      alreadyDeployed = false;
-    }
-  }
-
-  if (!alreadyDeployed) {
-    // Upload the multisig wasm.
-    const uploadResult = await sorobanTx(
-      signer.secret(),
-      [Operation.uploadContractWasm({ wasm })],
-      'upload-wasm',
-    );
-    console.log(`  wasm uploaded: ${uploadResult.hash}`);
-    step('deploy-upload', { txHash: uploadResult.hash, bytes: wasm.length });
-
-    // Create the contract (auth entry is attached by sorobanTx).
-    const createResult = await sorobanTx(
-      signer.secret(),
-      [
-        Operation.createCustomContract({
-          address: Address.fromString(signer.publicKey()),
-          wasmHash,
-          salt,
-        }),
-      ],
-      'create-contract',
-    );
-    console.log(`  multisig deployed: ${multisigId}`);
-    step('deploy-create', { txHash: createResult.hash, contractId: multisigId });
-
-    // init(signers=[signer], threshold=1, token=SAC)
-    const initResult = await sorobanTx(
-      signer.secret(),
-      [
-        Operation.invokeContractFunction({
-          contract: multisigId,
-          function: 'init',
-          args: [
-            xdr.ScVal.scvVec([
-              xdr.ScVal.scvAddress(Address.fromString(signer.publicKey()).toScAddress()),
-            ]),
-            xdr.ScVal.scvU32(1),
-            xdr.ScVal.scvAddress(Address.fromString(sacId).toScAddress()),
-          ],
-        }),
-      ],
-      'multisig-init',
-    );
-    console.log(`  multisig init: ${initResult.hash}`);
-    step('deploy-init', { txHash: initResult.hash });
-  } else {
-    console.log('  multisig already deployed — reusing (idempotent re-run)');
+  let multisigId: string;
+  if (priorState?.multisigId) {
+    multisigId = priorState.multisigId;
+    console.log(`  reusing multisig ${multisigId} (from ${STATE_FILE})`);
     step('deploy-reused', { contractId: multisigId });
+  } else {
+    multisigId = deployMultisigContract(sacId);
+    step('deploy-create', { contractId: multisigId });
   }
 
   // ── 3. Fund the multisig account (XLM + USDC via the SAC) ──

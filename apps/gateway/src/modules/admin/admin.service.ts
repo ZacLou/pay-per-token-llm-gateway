@@ -1,17 +1,23 @@
 import {
   BadRequestException,
+  ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Keypair } from '@stellar/stellar-sdk';
+import type { Redis } from 'ioredis';
 import { PAYOUT_RESERVING_STATUSES, prisma } from '@x402/database';
 import { getConfig } from '@x402/config';
 import { logger } from '@x402/logger';
 import { approveMultisig, getMultisigConfig, proposeMultisig } from '../x402/multisig-client';
+import { releaseLock, tryAcquireLock } from '../../common/distributed-lock';
+import { PAYOUT_LOCK_TTL_SECONDS, payoutProposeLockKey } from '../x402/payout-lock';
 
 @Injectable()
 export class AdminService {
+  constructor(@Inject('REDIS') private readonly redis: Redis) {}
   /**
    * Gateway statistics scoped to the authenticated wallet's providers.
    * Unscoped global counts were a cross-tenant information leak.
@@ -265,81 +271,117 @@ export class AdminService {
       );
     }
 
-    const pending = await this.getPendingPayoutAmount(options.providerId, ownerAddress);
-    let amount = options.amount ? BigInt(options.amount) : pending;
-    if (amount <= 0n) {
-      throw new BadRequestException('No pending confirmed revenue to pay out');
-    }
-    if (amount > pending) {
-      // Never propose more than what the ledger confirms — a malicious or
-      // mistaken explicit amount cannot over-pay beyond earned revenue.
-      amount = pending;
-    }
-
-    // 1. Persist the proposal first (source of truth for the dashboard).
-    const row = await prisma.payoutProposal.create({
-      data: {
-        providerId: options.providerId,
-        destination: provider.payoutWalletAddress,
-        amount,
-        asset: 'USDC',
-        status: 'pending',
-      },
-    });
-
-    // 2. Propose on-chain.
-    const proposeResult = await proposeMultisig({
-      contractId: config.contracts.multisig,
-      rpcUrl: config.stellar.sorobanRpcUrl,
-      networkPassphrase: config.stellar.networkPassphrase,
-      timeoutSeconds: Math.ceil(config.stellar.sorobanRpcTimeoutMs / 1000),
-      adminSecret: config.payment.contractAdminSecret,
-      destination: provider.payoutWalletAddress,
-      amount: amount.toString(),
-    });
-
-    if (!proposeResult.success) {
-      await prisma.payoutProposal.update({
-        where: { id: row.id },
-        data: { status: 'failed', error: proposeResult.error?.slice(0, 500) },
-      });
+    // Serialise the read→reserve→propose sequence against the daily cron and
+    // against a concurrent copy of this same request.
+    //
+    // `getPendingPayoutAmount` reads the reserved total and the row that
+    // reserves it is written after an on-chain round-trip. A double-submitted
+    // admin request (or a client retry after a timeout) therefore reads the
+    // same reserved total twice and proposes the same revenue twice; with a
+    // threshold-1 wallet both transfers execute. The cron writes the same
+    // ledger, so it takes this same per-provider key.
+    //
+    // Fail closed: refusing to propose is recoverable at any time (the revenue
+    // remains `confirmed`), whereas a duplicate proposal is not.
+    const lock = await tryAcquireLock(
+      this.redis,
+      payoutProposeLockKey(options.providerId),
+      PAYOUT_LOCK_TTL_SECONDS,
+    );
+    if (!lock.acquired) {
+      if (lock.reason === 'held') {
+        throw new ConflictException(
+          'A payout proposal for this provider is already in progress. Retry shortly.',
+        );
+      }
       throw new ServiceUnavailableException(
-        `On-chain payout proposal failed: ${proposeResult.error}`,
+        'Payout proposals are temporarily unavailable (cannot reach the coordination store).',
       );
     }
 
-    const updated = await prisma.payoutProposal.update({
-      where: { id: row.id },
-      data: { status: 'proposed', proposalId: proposeResult.proposalId ?? null },
-    });
+    try {
+      const pending = await this.getPendingPayoutAmount(options.providerId, ownerAddress);
+      let amount = options.amount ? BigInt(options.amount) : pending;
+      if (amount <= 0n) {
+        throw new BadRequestException('No pending confirmed revenue to pay out');
+      }
+      if (amount > pending) {
+        // Never propose more than what the ledger confirms — a malicious or
+        // mistaken explicit amount cannot over-pay beyond earned revenue.
+        amount = pending;
+      }
 
-    // 3. Threshold-1 auto-approve: read the multisig config; if the wallet
-    // needs a single signature, approve immediately (the single signer is the
-    // whole quorum). Higher thresholds stay `proposed` for signer approval.
-    const multisigConfig = await getMultisigConfig(
-      config.contracts.multisig,
-      config.stellar.sorobanRpcUrl,
-      config.stellar.networkPassphrase,
-      Math.ceil(config.stellar.sorobanRpcTimeoutMs / 1000),
-    );
+      // 1. Persist the proposal first (source of truth for the dashboard).
+      const row = await prisma.payoutProposal.create({
+        data: {
+          providerId: options.providerId,
+          destination: provider.payoutWalletAddress,
+          amount,
+          asset: 'USDC',
+          status: 'pending',
+        },
+      });
 
-    if (multisigConfig && multisigConfig.threshold <= 1 && proposeResult.proposalId !== undefined) {
-      const approved = await this.approvePayout(ownerAddress, updated.id);
+      // 2. Propose on-chain.
+      const proposeResult = await proposeMultisig({
+        contractId: config.contracts.multisig,
+        rpcUrl: config.stellar.sorobanRpcUrl,
+        networkPassphrase: config.stellar.networkPassphrase,
+        timeoutSeconds: Math.ceil(config.stellar.sorobanRpcTimeoutMs / 1000),
+        adminSecret: config.payment.contractAdminSecret,
+        destination: provider.payoutWalletAddress,
+        amount: amount.toString(),
+      });
+
+      if (!proposeResult.success) {
+        await prisma.payoutProposal.update({
+          where: { id: row.id },
+          data: { status: 'failed', error: proposeResult.error?.slice(0, 500) },
+        });
+        throw new ServiceUnavailableException(
+          `On-chain payout proposal failed: ${proposeResult.error}`,
+        );
+      }
+
+      const updated = await prisma.payoutProposal.update({
+        where: { id: row.id },
+        data: { status: 'proposed', proposalId: proposeResult.proposalId ?? null },
+      });
+
+      // 3. Threshold-1 auto-approve: read the multisig config; if the wallet
+      // needs a single signature, approve immediately (the single signer is the
+      // whole quorum). Higher thresholds stay `proposed` for signer approval.
+      const multisigConfig = await getMultisigConfig(
+        config.contracts.multisig,
+        config.stellar.sorobanRpcUrl,
+        config.stellar.networkPassphrase,
+        Math.ceil(config.stellar.sorobanRpcTimeoutMs / 1000),
+      );
+
+      if (
+        multisigConfig &&
+        multisigConfig.threshold <= 1 &&
+        proposeResult.proposalId !== undefined
+      ) {
+        const approved = await this.approvePayout(ownerAddress, updated.id);
+        return {
+          ...approved,
+          autoApproved: true,
+        };
+      }
+
       return {
-        ...approved,
-        autoApproved: true,
+        id: updated.id,
+        providerId: updated.providerId,
+        proposalId: updated.proposalId,
+        destination: updated.destination,
+        amount: updated.amount.toString(),
+        status: updated.status,
+        autoApproved: false,
       };
+    } finally {
+      await releaseLock(this.redis, lock.handle);
     }
-
-    return {
-      id: updated.id,
-      providerId: updated.providerId,
-      proposalId: updated.proposalId,
-      destination: updated.destination,
-      amount: updated.amount.toString(),
-      status: updated.status,
-      autoApproved: false,
-    };
   }
 
   /**

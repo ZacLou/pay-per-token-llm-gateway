@@ -81,9 +81,8 @@ fn prop_approval_quorum_semantics_under_random_orders() {
             signer_vec.push_back(s);
         }
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signer_vec.clone(), threshold, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signer_vec, &threshold, &token);
         assert_eq!(client.get_config().threshold, threshold);
 
         let destination = Address::generate(&env);
@@ -152,9 +151,8 @@ fn prop_proposal_pagination_window_length_for_random_probes() {
     let destination = Address::generate(&env);
 
     let signers = Vec::from_array(&env, [signer]);
-    let contract_id = env.register(Multisig, ());
+    let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
     let client = MultisigClient::new(&env, &contract_id);
-    client.init(&signers, &1u32, &token);
 
     let count = 1 + prng.below(120) as u32;
     for i in 0..count {
@@ -199,9 +197,8 @@ fn prop_rotation_validation_accepts_only_sound_configs() {
             signer_list.push(s);
         }
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), threshold, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &threshold, &token);
 
         // Random proposed new set: length m (1..=6), threshold nt (0..=8),
         // with duplicates injected ~30% of the time.

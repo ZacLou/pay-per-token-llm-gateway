@@ -96,9 +96,11 @@ gpg --decrypt /backups/x402-latest.dump.gpg | pg_restore \
 ### 3.4 Admin-key compromise
 
 1. Rotate `CONTRACT_ADMIN_SECRET` in the secret manager.
-2. Deploy a **fresh payment-verifier** with the new admin (`init(newAdmin)`),
-   record the new ID in config; `set_admin` on the old contract is the
-   in-place alternative if the old key is still usable.
+2. Deploy a **fresh payment-verifier** with the new admin by passing it as the
+   constructor argument (`stellar contract deploy … -- --admin <newAdmin>`;
+   `scripts/deploy-contracts.sh` does this), record the new ID in config;
+   `set_admin` on the old contract is the in-place alternative if the old key
+   is still usable.
 
 ## 4. Health & readiness
 

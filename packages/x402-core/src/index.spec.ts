@@ -9,7 +9,7 @@ import {
   type RedisLike,
 } from './index';
 
-import type { RouteConfig, PaymentAsset, StellarNetwork } from '@x402/types';
+import type { RouteConfig } from '@x402/types';
 
 function makeRoute(overrides: Partial<RouteConfig> = {}): RouteConfig {
   return {

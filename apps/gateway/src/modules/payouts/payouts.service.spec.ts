@@ -50,6 +50,13 @@ const VALID_PAYOUT = payoutKeypair.publicKey();
 const ADMIN_SECRET = Keypair.random().secret();
 const ADMIN_PUBLIC = Keypair.fromSecret(ADMIN_SECRET).publicKey();
 
+// Minimal Redis double: `set` is the lock claim (`SET NX`), `eval` is the
+// compare-and-delete release.
+const mockRedis = {
+  set: jest.fn(),
+  eval: jest.fn(),
+};
+
 const CONFIG = {
   payment: { payoutAutomationEnabled: true, contractAdminSecret: ADMIN_SECRET },
   contracts: { multisig: 'CDMBVMMNJVAJVAV3T2TAL2TAACGTKYUS45RXNLCYKYUC3VGHBI66NWAA' },
@@ -77,8 +84,10 @@ describe('PayoutsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new PayoutsService(mockPrisma as never);
+    service = new PayoutsService(mockPrisma as never, mockRedis as never);
     mockGetConfig.mockReturnValue(CONFIG);
+    mockRedis.set.mockResolvedValue('OK');
+    mockRedis.eval.mockResolvedValue(1);
     mockPrisma.provider.findMany.mockResolvedValue([provider()]);
     mockPrisma.provider.findUnique.mockResolvedValue({
       active: true,
@@ -251,6 +260,87 @@ describe('PayoutsService', () => {
     expect(mockPrisma.payoutProposal.update).toHaveBeenCalledWith({
       where: { id: 'prop-1' },
       data: { status: 'failed', error: 'RPC unavailable' },
+    });
+  });
+
+  // ── Per-provider double-proposal guard ──
+  //
+  // `pendingRevenue` is a read-modify-write against the `PayoutProposal`
+  // ledger whose write lands several awaits after the read, so two writers
+  // that interleave both reserve the whole balance. The writers are the daily
+  // cron (which fires in EVERY replica) and the admin propose endpoint (whose
+  // caller can double-submit or retry).
+
+  describe('per-provider payout lock', () => {
+    it('claims a per-provider lock with SET NX before reading revenue', async () => {
+      await service.handleDailyPayouts();
+
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'x402:lock:payout-propose:p-1',
+        expect.any(String),
+        'EX',
+        120,
+        'NX',
+      );
+      // The claim precedes the read it protects.
+      expect(mockRedis.set.mock.invocationCallOrder[0]).toBeLessThan(
+        mockPrisma.payment.aggregate.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('skips a provider whose lock another instance already holds', async () => {
+      mockRedis.set.mockResolvedValue(null); // NX rejected — key already held
+
+      await service.handleDailyPayouts();
+
+      expect(mockPrisma.payment.aggregate).not.toHaveBeenCalled();
+      expect(mockPrisma.payoutProposal.create).not.toHaveBeenCalled();
+      expect(mockPropose).not.toHaveBeenCalled();
+      // It never owned the lock, so it must not delete it.
+      expect(mockRedis.eval).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the lock cannot be acquired because Redis is down', async () => {
+      mockRedis.set.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      await service.handleDailyPayouts();
+
+      // A skipped provider is recoverable (its revenue stays confirmed and is
+      // proposed next run); a duplicate payout is not. Never propose unlocked.
+      expect(mockPrisma.payoutProposal.create).not.toHaveBeenCalled();
+      expect(mockPropose).not.toHaveBeenCalled();
+    });
+
+    it('releases the lock with the acquiring token after a successful proposal', async () => {
+      await service.handleDailyPayouts();
+
+      const token = mockRedis.set.mock.calls[0][1];
+      expect(token).toEqual(expect.any(String));
+      expect(mockRedis.eval).toHaveBeenCalledWith(
+        expect.stringContaining("redis.call('DEL'"),
+        1,
+        'x402:lock:payout-propose:p-1',
+        token,
+      );
+    });
+
+    it('releases the lock when the proposal fails, so the next run is not blocked', async () => {
+      mockPrisma.payment.aggregate.mockRejectedValue(new Error('db down'));
+
+      await service.handleDailyPayouts();
+
+      expect(mockRedis.eval).toHaveBeenCalled();
+    });
+
+    it('does not lock at all when the provider is rejected before the money path', async () => {
+      mockPrisma.provider.findUnique.mockResolvedValue({
+        active: false,
+        payoutWalletAddress: VALID_PAYOUT,
+      });
+
+      await service.handleDailyPayouts();
+
+      expect(mockRedis.set).not.toHaveBeenCalled();
     });
   });
 });

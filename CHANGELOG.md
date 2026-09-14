@@ -8,6 +8,33 @@ All notable changes to the x402 LLM Gateway project.
 
 ### Security
 
+- **Contract initialization is now atomic (C11 fixed).** `stellar contract
+deploy` and a separate `init` call are two different transactions, so anyone
+  could previously initialize a freshly deployed contract first with their own
+  `admin` (payment-verifier, credit-escrow) or their own single-signer set
+  (multisig) — taking ownership of a contract the deployer had just created.
+  The re-init guard in each contract covered the _second_ call, not the first.
+  All three contracts now initialize in a Soroban `__constructor`, which
+  executes **inside** the deploy transaction, and the `init` entry point was
+  **removed** so no post-deploy initialization path exists at all. This also
+  removes the "deployed but never initialized" failure mode: a contract whose
+  constructor rejects its arguments now fails the deploy outright.
+
+  Note that the obvious fix — `admin.require_auth()` on `init` — would **not**
+  have worked: the address is a caller-supplied parameter, so an attacker names
+  _and signs_ their own, and `require_auth` only proves control of the address
+  the caller supplied, never that they are the deployer.
+
+  This is a **deploy-ABI change**: `scripts/deploy-contracts.sh` now passes
+  each contract's constructor arguments to `stellar contract deploy`
+  (`-- <args>`) instead of calling `init` afterwards, and all three contract
+  test suites were migrated to `env.register(Contract, (<constructor args>))`.
+  Because there is no on-chain state to migrate, the next deployment simply
+  uses the new path. All 111 contract tests pass (29 / 46 / 36) and the WASM
+  artifacts build to 7–9 KiB against the 64 KiB deploy limit. See `SECURITY.md`
+  (residual risk 9), `THREAT-MODEL.md` (C2/C11) and `MAINNET_READINESS.md`
+  §5/§6.
+
 - **SSRF redirect bypass closed.** The public-IP validation for webhook URLs
   and upstream LLM URLs was performed on the _initial_ destination, but no
   `fetch` in the repository set `redirect`, so undici's default behaviour
@@ -45,6 +72,10 @@ All notable changes to the x402 LLM Gateway project.
   server-verified payer wallet on the confirmed payment row, not the client IP,
   so rotating source addresses cannot mint fresh buckets. Unpaid requests
   remain per-IP.
+- **Payout concurrency:** proposal creation is serialised per provider across
+  gateway instances and across the admin API, so a multi-replica deployment (or
+  a retried request) cannot commission two payouts for the same revenue. See
+  the `Fixed` entry below for the failure this closes.
 - **Payout hardening:** payout automation validates `payoutWalletAddress` with
   `StrKey.isValidEd25519PublicKey`, re-checks provider approval/active state at
   proposal time, and refuses to pay when the destination changed. The
@@ -53,6 +84,23 @@ All notable changes to the x402 LLM Gateway project.
 
 ### Fixed
 
+- **Payout proposals can no longer be double-proposed.** `pendingRevenue` is a
+  read-modify-write against the `PayoutProposal` ledger whose write lands
+  several awaited steps after the read (a Soroban round-trip). Two writers
+  interleaving inside that window both observe the same `alreadyReserved` and
+  both reserve the whole balance; with a threshold-1 wallet both proposals
+  auto-execute, paying the provider twice for one revenue stream. There are two
+  writers: `PayoutsService`'s daily `@Cron`, which NestJS fires in **every**
+  replica — `infrastructure/kubernetes/gateway.yaml` runs 2, and its README
+  invites raising that — and `AdminService.proposePayout`, which a
+  double-submitted or client-retried admin request hits twice. Both now take a
+  **per-provider Redis lock** (`x402:lock:payout-propose:<providerId>`) around
+  the read→reserve→propose sequence, so they exclude each other and unrelated
+  providers stay independent. Fail-closed: if the lock cannot be taken (Redis
+  unreachable) the proposal is refused — a skipped provider loses nothing
+  because its revenue stays `confirmed`, whereas a duplicate proposal moves
+  money that no revenue backs. `AdminService` returns 409 when a proposal for
+  the same provider is already in flight.
 - **Credit-escrow settlement now actually settles — exactly once.** Three
   defects in the `#25` wiring meant the documented behaviour did not hold:
   (1) an escrow draw was pre-charged by `chargeEscrowOnChain` before
@@ -102,6 +150,16 @@ quote was issued"`. At retry time no `Payment` row carried the hash yet (the
   bound — fail-closed. Covered by new unit tests (`quoteMemo` /
   `quoteIdPrefixFromMemo`, `findPendingByQuoteMemo`) and two e2e cases;
   `scripts/testnet-journey.sh` now passes its `HTTP 200` step.
+- **Live payout-leg deploy updated for the constructor ABI.**
+  `scripts/testnet-payout.ts` deployed a fresh multisig with raw SDK operations
+  and then called the `init` entry point — which the atomic-initialization
+  change removed, so the payout leg of the live journey would have failed at
+  deploy. It now deploys through the `stellar` CLI with the constructor
+  arguments (`-- --signers … --threshold 1 --token …`), the same mechanism as
+  `scripts/deploy-contracts.sh`; the bundled `@stellar/stellar-sdk` 12.x
+  predates the protocol-23 `CREATE_CONTRACT_V2` host function, so it cannot
+  carry constructor arguments from TypeScript. `scripts/testnet-journey.sh`
+  now lists the CLI as a requirement of that leg.
 - **Video forged-hash demo:** the capture used a hardcoded `f`×64 hash, which
   replay protection claimed on first sight, so later captures reported
   "Payment already used" instead of the intended fail-closed
@@ -253,10 +311,31 @@ quote was issued"`. At retry time no `Payment` row carried the hash yet (the
 - **L4:** CHANGELOG.md, git tags, and release cadence established
 - **L2:** `contracts/deployed-addresses.json` committed and tracked
 
-### Known Limitations
+### Known Limitations (as recorded at the 0.1.0 release)
 
-- Circuit breaker is in-memory only (not shared across gateway instances)
-- SDK unit tests remain at 0% coverage (targeted as [#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45))
-- Escrow settlement is partially wired (credit-escrow contract exists but gateway settlement path is incomplete — [#25](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/25))
-- Streaming receipt headers are not yet set (`X-Payment-Receipt` empty on SSE — [#29](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/29))
-- API key / session tables in Prisma schema are dead code — [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47)
+> Kept for historical accuracy, not as a current status. Four of these were
+> fixed in the [Unreleased] section above and are struck through here so the
+> two sections cannot be read as contradicting each other.
+
+- Circuit breaker is in-memory only (not shared across gateway instances) —
+  **still true today**; tracked in
+  [`MAINNET_READINESS.md`](./MAINNET_READINESS.md).
+- ~~SDK unit tests remain at 0% coverage
+  ([#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45))~~
+  — **resolved**; `packages/sdk` now has a Jest target with a suite covering
+  the `call`/`callStream`/signer paths.
+- ~~Escrow settlement is partially wired (credit-escrow contract exists but
+  gateway settlement path is incomplete —
+  [#25](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/25))~~
+  — **resolved**; a single settlement call site charges the actual cost and
+  refunds the surplus (see [Unreleased] → Fixed).
+- ~~Streaming receipt headers are not yet set (`X-Payment-Receipt` empty on SSE
+  — [#29](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/29))~~
+  — **resolved**; the gateway emits a trailing `x402_receipt` SSE event and the
+  SDK reads past `[DONE]` to surface it.
+- ~~API key / session tables in Prisma schema are dead code —
+  [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47)~~
+  — **resolved**; both models are dropped
+  (`20260812000000_remove_session_apikey_models`), and the later dead
+  `Wallet`/`PrepaidCredit` models were dropped too
+  (`20260913000000_remove_unused_wallet_prepaidcredit`).

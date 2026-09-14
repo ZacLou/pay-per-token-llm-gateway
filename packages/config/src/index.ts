@@ -517,7 +517,9 @@ export function loadConfig(): GatewayConfig {
       // futurenet → GBBD47...FLA5). An explicit USDC_ISSUER always wins.
       usdcIssuer: process.env.USDC_ISSUER || networkConfigs[network].usdcIssuer,
       quoteExpirySeconds: parseInt(process.env.QUOTE_EXPIRY_SECONDS || '300', 10),
-      minPaymentAmount: process.env.MIN_PAYMENT_AMOUNT || '10000', // 0.00001 XLM in stroops
+      // Stellar assets use 7 decimal places, so 10 000 stroops = 0.001 of the
+      // asset (USDC). A route priced at zero cannot quote below this floor.
+      minPaymentAmount: process.env.MIN_PAYMENT_AMOUNT || '10000',
       contractAdminSecret: process.env.CONTRACT_ADMIN_SECRET || undefined,
       escrowSettlementEnabled: process.env.ESCROW_SETTLEMENT_ENABLED === 'true',
       payoutAutomationEnabled: process.env.PAYOUT_AUTOMATION_ENABLED === 'true',

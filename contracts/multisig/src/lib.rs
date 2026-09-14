@@ -132,14 +132,22 @@ pub struct Multisig;
 
 #[contractimpl]
 impl Multisig {
-    pub fn init(env: Env, signers: Vec<Address>, threshold: u32, token: Address) {
+    /// Atomic initialization — runs inside the `deploy` transaction.
+    ///
+    /// Initialization is a constructor rather than a post-deploy `init` entry
+    /// point. `stellar contract deploy` and `init` are separate transactions,
+    /// so in the gap between them anyone could call `init` first with their own
+    /// single-signer set (threshold 1) and own the wallet. Requiring auth from
+    /// the signers does not close that hole: the caller supplies the signer
+    /// list, so an attacker simply names and signs their own key. A constructor
+    /// executes as part of deployment, so the window cannot exist.
+    ///
+    /// The previous `already initialized` guard is gone with `init` — a
+    /// constructor cannot run twice, so the re-initialization takeover it
+    /// defended against is now structurally impossible rather than merely
+    /// detected.
+    pub fn __constructor(env: Env, signers: Vec<Address>, threshold: u32, token: Address) {
         extend_ttl(&env);
-        // Prevent re-initialization: `init` may only be called once. Without
-        // this guard, anyone could re-initialize the contract with their own
-        // signer set (threshold = 1) and drain every token it holds.
-        if env.storage().instance().has(&CONFIG_KEY) {
-            panic!("Contract already initialized");
-        }
 
         // Validate threshold
         if threshold == 0 {
@@ -366,7 +374,6 @@ mod test {
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::testutils::Ledger as _;
     use soroban_sdk::token::StellarAssetClient;
-    use soroban_sdk::String;
 
     #[test]
     fn test_init_with_valid_signers() {
@@ -377,9 +384,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         let config = client.get_config();
         assert_eq!(config.signers.len(), 2);
@@ -396,9 +402,9 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
-        let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &0u32, &token);
+        // The constructor validates at deployment time, so this panics inside
+        // `register` — there is no later, racable `init` call.
+        env.register(Multisig, (signers.clone(), 0u32, token.clone()));
     }
 
     #[test]
@@ -410,14 +416,15 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
-        let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &5u32, &token);
+        // Rejected during deployment; see test_init_with_zero_threshold.
+        env.register(Multisig, (signers.clone(), 5u32, token.clone()));
     }
 
     #[test]
-    #[should_panic(expected = "Contract already initialized")]
-    fn test_double_init_rejected() {
+    fn test_constructor_initializes_atomically() {
+        // Initialization happens inside `env.register` — the deploy
+        // transaction itself — so there is no separate `init` call for an
+        // attacker to race with a single-signer set of their own.
         let env = Env::default();
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
@@ -425,16 +432,23 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
-        // Attack scenario: a second `init` with an attacker-controlled signer
-        // set and threshold 1 must be rejected, otherwise the contract could
-        // be taken over and drained.
+        // Configured the moment it exists; no second transaction was needed.
+        let config = client.get_config();
+        assert_eq!(config.signers.len(), 2);
+        assert_eq!(config.threshold, 2);
+        assert_eq!(config.token, token);
+
+        // A further deployment with an attacker-controlled single signer is a
+        // *different* contract, and nothing can re-initialize this one because
+        // no initialization entry point exists at all.
         let attacker = Address::generate(&env);
         let attacker_signers = Vec::from_array(&env, [attacker.clone()]);
-        client.init(&attacker_signers, &1u32, &token);
+        let other = env.register(Multisig, (attacker_signers.clone(), 1u32, token.clone()));
+        assert_ne!(contract_id, other);
+        assert_eq!(client.get_config().threshold, 2);
     }
 
     #[test]
@@ -447,9 +461,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let proposal_id = client.propose(&destination, &100_000_000i128);
         assert_eq!(proposal_id, 0);
@@ -474,9 +487,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let proposal_id = client.propose(&destination, &100_000_000i128);
 
@@ -497,9 +509,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         // Mint tokens to the multisig contract so it can transfer when executed
         StellarAssetClient::new(&env, &token)
@@ -535,9 +546,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         // Mint tokens to the multisig contract so it can transfer when executed
         StellarAssetClient::new(&env, &token)
@@ -562,9 +572,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         let id1 = client.propose(&destination, &10i128);
         let id2 = client.propose(&destination, &20i128);
@@ -590,9 +599,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let proposal_id = client.propose(&destination, &100_000_000i128);
 
@@ -613,9 +621,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
-        let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
+        // Rejected by the constructor, i.e. during deployment.
+        env.register(Multisig, (signers.clone(), 1u32, token.clone()));
     }
 
     #[test]
@@ -628,9 +635,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         client.propose(&destination, &0i128);
     }
@@ -645,9 +651,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         // A quorum of current signers (both, threshold = 2) rotates the set.
         let approvers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
@@ -678,9 +683,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         // Only signer1 approves — one short of the threshold of 2.
         let approvers = Vec::from_array(&env, [signer1.clone()]);
@@ -703,9 +707,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone(), signer3.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone()]);
         let attacker_signers = Vec::from_array(&env, [attacker.clone()]);
@@ -726,9 +729,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone(), signer3.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone(), signer3.clone()]);
         let new_signers = Vec::from_array(&env, [signer2.clone(), signer4.clone()]);
@@ -754,9 +756,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone(), signer2.clone(), signer1.clone()]);
         let new_signers = Vec::from_array(&env, [signer2.clone(), signer3.clone()]);
@@ -781,9 +782,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let duplicate_approvers = Vec::from_array(&env, [signer1.clone(), signer1.clone()]);
         let new_signers = Vec::from_array(&env, [signer2.clone()]);
@@ -805,9 +805,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone(), outsider.clone()]);
         let new_signers = Vec::from_array(&env, [outsider.clone()]);
@@ -827,9 +826,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
         let new_signers = Vec::from_array(&env, [signer1.clone()]);
@@ -855,9 +853,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone()]);
         let new_signers = Vec::from_array(&env, [signer2.clone()]);
@@ -880,9 +877,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         client.propose(&destination, &10i128);
         client.propose(&destination, &20i128);
@@ -908,9 +904,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         for i in 0..150 {
             client.propose(&destination, &((i + 1) as i128 * 10));
@@ -939,9 +934,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         let proposal_id = client.propose(&destination, &100_000_000i128);
 
@@ -985,9 +979,7 @@ mod test {
         let token = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
-        let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
 
         // Storage access from tests must run in the contract's context.
         let ttl = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
@@ -1008,9 +1000,8 @@ mod test {
         let destination = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         let proposal_id = client.propose(&destination, &100_000_000i128);
 
@@ -1056,9 +1047,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let proposal_id = client.propose(&destination, &100_000_000i128);
         let proposals_key = (PROPOSALS_KEY, proposal_id);
@@ -1093,9 +1083,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         client.mock_all_auths().approve(&signer1, &999u32);
     }
@@ -1114,9 +1103,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 1u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &1u32, &token);
 
         let empty_approvers = Vec::new(&env);
         let replacement = Vec::from_array(&env, [Address::generate(&env)]);
@@ -1135,9 +1123,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         let approvers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
         let replacement = Vec::from_array(&env, [Address::generate(&env)]);
@@ -1156,9 +1143,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         // Quorum met (2-of-2), but the rotated config demands 3 approvals
         // from a 1-signer set — invalid.
@@ -1179,9 +1165,8 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
 
-        let contract_id = env.register(Multisig, ());
+        let contract_id = env.register(Multisig, (signers.clone(), 2u32, token.clone()));
         let client = MultisigClient::new(&env, &contract_id);
-        client.init(&signers, &2u32, &token);
 
         // Quorum met, but the rotated signer set contains a duplicate — a
         // single address counting twice would let one key dominate the set.

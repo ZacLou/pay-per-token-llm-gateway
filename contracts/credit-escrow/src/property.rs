@@ -87,9 +87,8 @@ fn prop_accounting_invariant_under_random_operations() {
         let user = Address::generate(&env);
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
-        let contract_id = env.register(crate::CreditEscrow, ());
+        let contract_id = env.register(crate::CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
         let token_client = TokenClient::new(&env, &asset);
 
         // Fund the user well beyond any random op amount. The contract is
@@ -223,9 +222,8 @@ fn prop_usage_history_round_trips_charges() {
     let user = Address::generate(&env);
     let token_admin = Address::generate(&env);
     let asset = env.register_stellar_asset_contract(token_admin);
-    let contract_id = env.register(crate::CreditEscrow, ());
+    let contract_id = env.register(crate::CreditEscrow, (&admin, &asset));
     let client = CreditEscrowClient::new(&env, &contract_id);
-    client.init(&admin, &asset);
 
     StellarAssetClient::new(&env, &asset)
         .mock_all_auths()

@@ -55,9 +55,8 @@ const MAX_PAGE_SIZE: u32 = 100;
 fn setup_env() -> (Env, Address, PaymentVerifierClient<'static>) {
     let env = Env::default();
     let admin = Address::generate(&env);
-    let contract_id = env.register(PaymentVerifier, ());
+    let contract_id = env.register(PaymentVerifier, (&admin,));
     let client = PaymentVerifierClient::new(&env, &contract_id);
-    client.init(&admin);
     (env, admin, client)
 }
 

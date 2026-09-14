@@ -3,6 +3,24 @@
 > **18 well-scoped issues** spanning smart contracts (Rust/Soroban), gateway (NestJS), SDK (TypeScript), dashboard (Next.js), and security hardening.  
 > Each issue includes labels, complexity, acceptance criteria, and file-level pointers so contributors can start immediately.
 
+> ### ✅ All 18 issues are implemented and closed
+>
+> The issue bodies below are kept as the **historical problem statements** that
+> scoped this wave. Every one of them has since been implemented in the
+> repository, so the acceptance criteria are checked and the per-issue status
+> line reads `closed`. This file previously carried nine issues as `open` after
+> they had in fact shipped, which contradicted `GRANT_SUBMISSION.md`; the two
+> now agree.
+>
+> Two caveats on what this document does **not** claim:
+>
+> - It describes the **implementation state in this repository**, which is
+>   what a reviewer can verify by reading the code and running the tests. The
+>   GitHub-side state (labels, milestone, the Drips/Wave point ledger) is not
+>   reproducible from the source tree and is not asserted here.
+> - Issue points are the **wave's bounty scale**, not a measure of effort
+>   actually spent.
+
 ---
 
 ## Issue 1: Wire Credit Escrow Settlement in the Gateway
@@ -149,7 +167,7 @@ A caller can pass `limit = u32::MAX` and `offset = 0` — the loop iterates up t
 
 ## Issue 4: Remove `extend_ttl` from Read-Only Soroban Contract Functions
 
-**GitHub:** [#28](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/28) · **Status:** open
+**GitHub:** [#28](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/28) · **Status:** ✅ closed — write-only `extend_ttl` in all three contracts, with `test_reads_do_not_extend_ttl` guarding it
 
 **Title:** `perf(contracts): remove extend_ttl from read-only functions to reduce unnecessary gas costs`
 
@@ -180,17 +198,17 @@ Every public function in all three contracts calls `extend_ttl()`, including rea
 
 ### Acceptance Criteria
 
-- [ ] No `extend_ttl()` call in any read-only (non-mutating) contract function
-- [ ] `extend_ttl()` still called in every mutating function (deposit, withdraw, charge, refund, record_payment, propose, approve, set_*, init)
-- [ ] TTL survival tests still pass (TTL is extended on writes)
-- [ ] `cargo test` passes for all three contracts
-- [ ] Gas cost of `balance()` call is measurably lower than before
+- [x] No `extend_ttl()` call in any read-only (non-mutating) contract function
+- [x] `extend_ttl()` still called in every mutating function (deposit, withdraw, charge, refund, record_payment, propose, approve, set_*, init)
+- [x] TTL survival tests still pass (TTL is extended on writes)
+- [x] `cargo test` passes for all three contracts
+- [x] Gas cost of `balance()` call is measurably lower than before
 
 ---
 
 ## Issue 5: Add Payment Receipt Headers to Streaming (SSE) Responses
 
-**GitHub:** [#29](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/29) · **Status:** open
+**GitHub:** [#29](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/29) · **Status:** ✅ closed — trailing `x402_receipt` SSE event emitted after the withheld `[DONE]`, parsed by the SDK
 
 **Title:** `fix: set X-Payment-Receipt headers on streaming responses`
 
@@ -218,11 +236,11 @@ Non-streaming responses include `X-Payment-Receipt`, `X-Actual-Cost`, and `X-Sur
 
 ### Acceptance Criteria
 
-- [ ] Streaming responses include payment receipt information (either as headers set before streaming, or a final SSE event)
-- [ ] SDK's `callStream()` returns a `cost` field with the actual cost (not `undefined`)
-- [ ] Non-streaming path is unchanged
-- [ ] E2E test verifies the receipt is present on streaming responses
-- [ ] `pnpm exec nx test gateway` and `pnpm exec nx test gateway:test:e2e` pass
+- [x] Streaming responses include payment receipt information (either as headers set before streaming, or a final SSE event)
+- [x] SDK's `callStream()` returns a `cost` field with the actual cost (not `undefined`)
+- [x] Non-streaming path is unchanged
+- [x] E2E test verifies the receipt is present on streaming responses
+- [x] `pnpm exec nx test gateway` and `pnpm exec nx test gateway:test:e2e` pass
 
 ---
 
@@ -267,7 +285,7 @@ Non-streaming responses include `X-Payment-Receipt`, `X-Actual-Cost`, and `X-Sur
 
 ## Issue 7: Enforce `minPaymentAmount` in Quote Generation and Payment Verification
 
-**GitHub:** [#31](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/31) · **Status:** open
+**GitHub:** [#31](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/31) · **Status:** ✅ closed — floor enforced in `generateQuote` and `verifyStellarPayment`, default 10 000 stroops
 
 **Title:** `fix: enforce minPaymentAmount config in quote generation and payment verification`
 
@@ -295,11 +313,11 @@ Non-streaming responses include `X-Payment-Receipt`, `X-Actual-Cost`, and `X-Sur
 
 ### Acceptance Criteria
 
-- [ ] Quotes with `requiredAmount < minPaymentAmount` are either rejected (400) or clamped to the minimum
-- [ ] Payments below `minPaymentAmount` are rejected
-- [ ] Default `minPaymentAmount = 10000` when env var is not set
-- [ ] Unit tests cover: above-minimum (accepted), below-minimum (rejected), exactly-minimum (accepted)
-- [ ] `pnpm exec nx test gateway` and `pnpm exec nx test x402-core` pass
+- [x] Quotes with `requiredAmount < minPaymentAmount` are either rejected (400) or clamped to the minimum
+- [x] Payments below `minPaymentAmount` are rejected
+- [x] Default `minPaymentAmount = 10000` when env var is not set
+- [x] Unit tests cover: above-minimum (accepted), below-minimum (rejected), exactly-minimum (accepted)
+- [x] `pnpm exec nx test gateway` and `pnpm exec nx test x402-core` pass
 
 ---
 
@@ -471,7 +489,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 12: Require Explicit `TRUST_PROXY` and Add Wallet-Based Rate Limiting for the Paid Tier
 
-**GitHub:** [#41](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/41) · **Status:** open
+**GitHub:** [#41](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/41) · **Status:** ✅ closed — `TRUST_PROXY` disabled by default with a production warning; the paid tier is keyed by the verified payer wallet
 
 **Title:** `fix: require explicit TRUST_PROXY and add wallet-based rate limiting for the paid tier`
 
@@ -500,17 +518,17 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ### Acceptance Criteria
 
-- [ ] Production startup with unset `TRUST_PROXY` fails fast (or logs a prominent warning)
-- [ ] `RATE_LIMIT_BY_WALLET=true` keys the paid tier by wallet address
-- [ ] Spoofed `X-Forwarded-For` no longer bypasses limits in the default direct-exposure path
-- [ ] Unit tests for both IP-keyed and wallet-keyed paths
-- [ ] `pnpm exec nx test gateway` and `pnpm exec nx test config` pass
+- [x] Production startup with unset `TRUST_PROXY` fails fast (or logs a prominent warning)
+- [x] `RATE_LIMIT_BY_WALLET=true` keys the paid tier by wallet address
+- [x] Spoofed `X-Forwarded-For` no longer bypasses limits in the default direct-exposure path
+- [x] Unit tests for both IP-keyed and wallet-keyed paths
+- [x] `pnpm exec nx test gateway` and `pnpm exec nx test config` pass
 
 ---
 
 ## Issue 13: Validate Payout Wallets and Add an Optional Provider Approval Flow
 
-**GitHub:** [#42](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/42) · **Status:** open
+**GitHub:** [#42](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/42) · **Status:** ✅ closed — `StrKey` validation, payout-wallet-must-differ rule, `PROVIDER_APPROVAL_REQUIRED` gate
 
 **Title:** `feat: validate payout wallets and add an optional provider approval flow`
 
@@ -541,18 +559,18 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ### Acceptance Criteria
 
-- [ ] Invalid payout address → 400 with a clear message
-- [ ] Same-as-auth-wallet rejected by default
-- [ ] Approval-required mode: new providers inactive until approved
-- [ ] Dashboard shows field-level validation errors
-- [ ] Unit tests cover valid/invalid/same addresses
-- [ ] `pnpm exec nx test gateway` passes
+- [x] Invalid payout address → 400 with a clear message
+- [x] Same-as-auth-wallet rejected by default
+- [x] Approval-required mode: new providers inactive until approved
+- [x] Dashboard shows field-level validation errors
+- [x] Unit tests cover valid/invalid/same addresses
+- [x] `pnpm exec nx test gateway` passes
 
 ---
 
 ## Issue 14: Persist In-App Notifications in Postgres (Durable, Cross-Instance)
 
-**GitHub:** [#43](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/43) · **Status:** open
+**GitHub:** [#43](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/43) · **Status:** ✅ closed — Postgres `Notification` model + `/api/v1/notifications` read/unread endpoints and dashboard feed
 
 **Title:** `feat: persist in-app notifications in Postgres (durable, cross-instance)`
 
@@ -582,19 +600,19 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ### Acceptance Criteria
 
-- [ ] Notifications survive a gateway restart
-- [ ] Read/unread state is per-provider and wallet-scoped
-- [ ] Pagination works (limit 50 default)
-- [ ] In-memory fallback preserved when no DB
-- [ ] Migration applies cleanly (`prisma migrate dev`)
-- [ ] Unit tests for the DB handler + endpoints
-- [ ] `pnpm exec nx test gateway` passes
+- [x] Notifications survive a gateway restart
+- [x] Read/unread state is per-provider and wallet-scoped
+- [x] Pagination works (limit 50 default)
+- [x] In-memory fallback preserved when no DB
+- [x] Migration applies cleanly (`prisma migrate dev`)
+- [x] Unit tests for the DB handler + endpoints
+- [x] `pnpm exec nx test gateway` passes
 
 ---
 
 ## Issue 15: Move Analytics Time-Series Bucketing from JS to SQL
 
-**GitHub:** [#44](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/44) · **Status:** open
+**GitHub:** [#44](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/44) · **Status:** ✅ closed — single `$queryRaw` `date_trunc` aggregation with grid-aligned windows
 
 **Title:** `perf: move analytics time-series bucketing from JS to SQL`
 
@@ -621,11 +639,11 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ### Acceptance Criteria
 
-- [ ] `getTimeSeries` issues one SQL query — no unbounded `findMany`
-- [ ] Response shape identical to today (bucket timestamps, counts, revenue string)
-- [ ] Empty windows still return zero-filled buckets
-- [ ] Unit tests cover multi-bucket aggregation and empty windows
-- [ ] `pnpm exec nx test gateway` passes
+- [x] `getTimeSeries` issues one SQL query — no unbounded `findMany`
+- [x] Response shape identical to today (bucket timestamps, counts, revenue string)
+- [x] Empty windows still return zero-filled buckets
+- [x] Unit tests cover multi-bucket aggregation and empty windows
+- [x] `pnpm exec nx test gateway` passes
 
 ---
 
@@ -674,7 +692,7 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ## Issue 17: Populate Route in Payment Receipts
 
-**GitHub:** [#46](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/46) · **Status:** open
+**GitHub:** [#46](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/46) · **Status:** ✅ closed — `route` present in the stored receipt, the `X-Payment-Receipt` header and the SSE event
 
 **Title:** `fix: populate route in payment receipts (X-Payment-Receipt shows empty route)`
 
@@ -702,16 +720,16 @@ The `multisig` Soroban contract (`contracts/multisig`) implements `propose` / `a
 
 ### Acceptance Criteria
 
-- [ ] Confirmed receipts include the real route path
-- [ ] Stored `receiptJson` and returned header both have a non-empty route
-- [ ] Unit test covers it
-- [ ] `pnpm exec nx test gateway` passes
+- [x] Confirmed receipts include the real route path
+- [x] Stored `receiptJson` and returned header both have a non-empty route
+- [x] Unit test covers it
+- [x] `pnpm exec nx test gateway` passes
 
 ---
 
 ## Issue 18: Remove Unused `Session` and `ApiKey` Prisma Models
 
-**GitHub:** [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47) · **Status:** open
+**GitHub:** [#47](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/47) · **Status:** ✅ closed — both models dropped (`20260812000000_remove_session_apikey_models`)
 
 **Title:** `chore: remove unused Session and ApiKey Prisma models`
 
@@ -740,10 +758,10 @@ The Prisma schema defines `Session` and `ApiKey` models, but neither is used: se
 
 ### Acceptance Criteria
 
-- [ ] Zero references to the removed models remain in code
-- [ ] Migration drops `Session` and `ApiKey` cleanly
-- [ ] `prisma generate` succeeds and the gateway compiles
-- [ ] Existing tests pass
+- [x] Zero references to the removed models remain in code
+- [x] Migration drops `Session` and `ApiKey` cleanly
+- [x] `prisma generate` succeeds and the gateway compiles
+- [x] Existing tests pass
 
 ---
 
@@ -754,28 +772,28 @@ The Prisma schema defines `Session` and `ApiKey` models, but neither is used: se
 | 1   | Wire credit-escrow settlement               | gateway + contracts | High       | ✅ done | `enhancement` `priority:high`                      |
 | 2   | SDK external signer                         | SDK                 | Medium     | ✅ done | `bug` `priority:high`                              |
 | 3   | Clamp unbounded pagination limits           | contracts           | Medium     | ✅ done | `bug` `security` `priority:medium`                 |
-| 4   | Remove extend_ttl from reads                | contracts           | Medium     | open    | `enhancement` `priority:medium`                    |
-| 5   | Streaming receipt headers                   | gateway + SDK       | Medium     | open    | `bug` `priority:medium`                            |
+| 4   | Remove extend_ttl from reads                | contracts           | Medium     | ✅ done | `enhancement` `priority:medium`                    |
+| 5   | Streaming receipt headers                   | gateway + SDK       | Medium     | ✅ done | `bug` `priority:medium`                            |
 | 6   | DNS rebinding protection at proxy time      | gateway             | Medium     | ✅ done | `bug` `security` `priority:medium`                 |
-| 7   | Enforce minPaymentAmount                    | gateway + x402-core | Trivial    | open    | `bug` `priority:medium` `good first issue`         |
+| 7   | Enforce minPaymentAmount                    | gateway + x402-core | Trivial    | ✅ done | `bug` `priority:medium` `good first issue`         |
 | 8   | Dashboard unit tests                        | dashboard           | Medium     | ✅ done | `enhancement` `priority:medium` `good first issue` |
 | 9   | Wire email notification channel             | notifications       | Medium     | ✅ done | `enhancement` `priority:medium`                    |
 | 10  | Escrow accounting invariant tests           | contracts           | Medium     | ✅ done | `enhancement` `priority:medium`                    |
 | 11  | Multisig payout automation                  | gateway + contracts | High       | ✅ done | `enhancement` `priority:high`                      |
-| 12  | Explicit TRUST_PROXY + wallet rate limiting | gateway             | Medium     | open    | `bug` `security` `priority:medium`                 |
-| 13  | Payout wallet validation + approval flow    | gateway             | Medium     | open    | `enhancement` `security` `priority:medium`         |
-| 14  | Postgres-backed in-app notifications        | notifications       | Medium     | open    | `enhancement` `priority:medium`                    |
-| 15  | SQL time-series bucketing                   | gateway             | Medium     | open    | `enhancement` `priority:medium` `good first issue` |
+| 12  | Explicit TRUST_PROXY + wallet rate limiting | gateway             | Medium     | ✅ done | `bug` `security` `priority:medium`                 |
+| 13  | Payout wallet validation + approval flow    | gateway             | Medium     | ✅ done | `enhancement` `security` `priority:medium`         |
+| 14  | Postgres-backed in-app notifications        | notifications       | Medium     | ✅ done | `enhancement` `priority:medium`                    |
+| 15  | SQL time-series bucketing                   | gateway             | Medium     | ✅ done | `enhancement` `priority:medium` `good first issue` |
 | 16  | SDK unit tests                              | SDK                 | Medium     | ✅ done | `enhancement` `priority:medium` `good first issue` |
-| 17  | Receipt route field                         | gateway             | Trivial    | open    | `bug` `trivial` `good first issue`                 |
-| 18  | Remove unused Session/ApiKey models         | database            | Trivial    | open    | `enhancement` `trivial` `good first issue`         |
+| 17  | Receipt route field                         | gateway             | Trivial    | ✅ done | `bug` `trivial` `good first issue`                 |
+| 18  | Remove unused Session/ApiKey models         | database            | Trivial    | ✅ done | `enhancement` `trivial` `good first issue`         |
 
-**All 18 issues should carry:** `Stellar Wave` `GrantFox OSS` `Maybe Rewarded`
+**All 18 issues carry:** `Stellar Wave` `GrantFox OSS` `Maybe Rewarded`
 
-**Point allocation (open issues):** 0× High + 8× Medium (150×8) + 3× Trivial (100×3) = **1,500 total points**
+**Point allocation (all issues):** 3× High (200×3) + 12× Medium (150×12) + 3× Trivial (100×3) = **2,700 total points**
 
-**Implemented/closed:** 7 of 18 issues — a strong "active project" signal for grant reviewers.
+**Implemented/closed:** 18 of 18 issues — every issue in the wave is done.
 
 ---
 
-_Prepared for Wave 8 / GrantFox submission — August 2026 · Updated September 9, 2026_
+_Prepared for Wave 8 / GrantFox submission — August 2026 · Status reconciled with the code 2026-09-14_

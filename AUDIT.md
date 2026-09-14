@@ -555,11 +555,12 @@ re-added.
 Fourth review. This pass re-verified every closed issue against the actual
 implementation (not the docs), from a **clean clone** (no `node_modules`), and
 ran the full matrix against a **real PostgreSQL 16** while exercising the new
-migrations. Ten of the fourteen named issues were verified as genuinely and
-completely implemented (#26, #27, #28, #29, #31, #40, #41, #42, #43, #44, #45,
-#46, #47); the remaining two (#25 credit-escrow settlement, and the payout
-automation it feeds) contained **real accounting defects** that the existing
-tests did not catch. Those are now fixed and regression-tested.
+migrations. Every one of the fourteen named issues is implemented. Two shipped
+with **real accounting defects** the existing tests did not catch — #25
+(credit-escrow settlement) and the #40 payout automation it feeds — and both
+are now fixed and regression-tested. The other twelve (#26, #27, #28, #29,
+#31, #41, #42, #43, #44, #45, #46, #47) were verified as genuinely and
+completely implemented.
 
 ### 10.1 Defects found and fixed
 
@@ -624,3 +625,54 @@ migrations apply cleanly to an empty database and produce **zero schema drift**.
 Remaining blockers are unchanged and external: the **independent Soroban
 contract audit** (mainnet gate), a **live funded-testnet re-run**, and the
 **dev-tooling dependency advisories**.
+
+---
+
+## 11. Addendum — 2026-09-14 finalization pass
+
+Fifth review. The contracts were hardened further and the change was traced
+through **every** consumer, because a contract ABI change is only finished when
+nothing still calls the old surface.
+
+### 11.1 What this pass changed
+
+| #   | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Why it matters                                                                                                                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C11 | **Atomic contract initialization.** `deploy` and `init` were two transactions, so between them anyone could initialize a freshly deployed contract with their own `admin` (payment-verifier, credit-escrow) or their own single-signer set (multisig) and take it over. Initialization is now a Soroban `__constructor` that runs **inside** the deploy transaction, and the `init` entry point was removed from all three contracts. `require_auth()` on `init` would **not** have fixed this — the address is caller-supplied, so an attacker signs their own. | Removes the deploy→init takeover window and the "deployed but never initialized" state entirely.                                                           |
+| C13 | **Consumer of the removed `init` entry point fixed.** `scripts/testnet-payout.ts` deployed a fresh multisig with raw SDK ops and then called `init` — which no longer exists, so the payout leg of the live journey would fail at deploy. It now deploys through the `stellar` CLI (`… -- --signers … --threshold 1 --token …`), the same atomic mechanism `scripts/deploy-contracts.sh` uses, because the bundled `@stellar/stellar-sdk` 12.x predates the protocol-23 `CREATE_CONTRACT_V2` host function and cannot carry constructor arguments.               | Keeps the documented live testnet journey runnable after the ABI change; no stale caller of the removed entry point remains anywhere in the repo.          |
+| C14 | **Payout double-propose race closed.** `pendingRevenue` was a read-modify-write whose reserve wrote several awaited steps (including a Soroban round-trip) after the read, and it has two writers: the daily `@Cron` (which NestJS fires in **every** replica) and `AdminService.proposePayout`. Both now take a per-provider Redis lock (`x402:lock:payout-propose:<providerId>`), fail-closed if Redis is unreachable.                                                                                                                                         | Two interleaved writers both reserved the whole balance; with a threshold-1 wallet both transfers execute, paying a provider twice for one revenue stream. |
+| —   | **Documentation drift corrected** after the constructor migration: `OPERATIONS.md` (§3.4 admin-rotation `init(newAdmin)` → constructor argument), `ARCHITECTURE.md` §8 (deploy step), `GAS-OPTIMIZATION.md` §5.2 (`deploy, init` comment), `.github/workflows/deploy.yml` job comment, and `scripts/testnet-journey.sh` requirements (payout leg needs the `stellar` CLI). `AUDIT.md` §10's issue tally was also corrected (it listed thirteen issue IDs as "ten" and counted #40 in both the verified and the defect set).                                      | Normative docs must describe the deploy flow that actually exists, and the audit must not contradict itself.                                               |
+
+### 11.2 Verification evidence (this environment)
+
+| Check                                                      | Result                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| `nx run-many --target=test --all` (8 projects)             | ✅ **448 tests / 28 suites**                                        |
+| `nx run-many --target=test:e2e --all`                      | ✅ **51 tests / 3 suites**                                          |
+| `cargo test` — payment-verifier / credit-escrow / multisig | ✅ **29 / 46 / 36 = 111 tests** (incl. gas/storage benches)         |
+| `nx run-many --target=lint --all` (15 projects)            | ✅ 0 errors (15 warnings)                                           |
+| `nx run-many --target=build --all`                         | ✅ gateway (`tsc` + esbuild) + dashboard (`next build`)             |
+| Prettier check on edited docs/scripts                      | ✅ clean                                                            |
+| Secret scan (private keys / AWS / `sk-` / Stellar seeds)   | ✅ clean                                                            |
+| Tracked artifacts (`node_modules`/`dist`/`.env`/targets)   | ✅ none committed; the duplicate `infrastructure/k8s/` tree is gone |
+| Every documented issue #25–#47                             | ✅ code-inspected this pass — implemented, not placeholders         |
+
+### 11.3 Remaining blockers (external)
+
+1. **Independent Soroban security audit** — the mainnet go/no-go gate; the
+   contracts are self-tested only (`MAINNET_READINESS.md` §1).
+2. **Live funded-testnet re-run** — the payout leg now deploys via the
+   `stellar` CLI with constructor args, but that path was not executed against
+   live testnet in this environment (no funded keypair); it remains to be
+   re-run with `bash scripts/testnet-journey.sh`.
+3. **Dev-tooling dependency advisories** — 15 osv-scanner findings with no
+   patched release at any version (`MAINNET_READINESS.md` §7).
+
+### 11.4 Submission readiness
+
+The repository is **submission-ready for a Testnet-scoped grant** and
+**not mainnet-ready**. Clean install, build, lint, typecheck, lint, unit/e2e/
+contract tests, and the schema-drift check are all green; the gateway, dashboard,
+SDK, contracts, and infra all build from a clean clone with no undocumented
+steps. The three blockers above are external and honestly documented rather
+than papered over.

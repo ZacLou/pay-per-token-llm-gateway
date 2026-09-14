@@ -145,11 +145,21 @@ pub struct CreditEscrow;
 
 #[contractimpl]
 impl CreditEscrow {
-    pub fn init(env: Env, admin: Address, asset: Address) {
+    /// Atomic initialization — runs inside the `deploy` transaction.
+    ///
+    /// Initialization is a constructor rather than a post-deploy `init`
+    /// entry point because `stellar contract deploy` and `init` are separate
+    /// transactions: in the window between them anyone could call `init`
+    /// first, naming their own `admin` (and, here, their own asset), and take
+    /// ownership of the contract — including the ability to withdraw escrowed
+    /// revenue. Auth on `init` cannot prevent that, since the `admin` address
+    /// is supplied by the caller and an attacker can sign their own. A
+    /// constructor runs as part of deployment, so the window does not exist.
+    ///
+    /// The old `already initialized` guard is gone with `init`: a constructor
+    /// cannot execute twice.
+    pub fn __constructor(env: Env, admin: Address, asset: Address) {
         extend_ttl(&env);
-        if env.storage().instance().has(&CONFIG_KEY) {
-            panic!("Contract already initialized");
-        }
         let config = ContractConfig {
             admin,
             asset,
@@ -414,9 +424,8 @@ mod test {
         let token_admin = Address::generate(env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(env, &contract_id);
-        client.init(&admin, &asset);
 
         (admin, user, asset, client)
     }
@@ -634,14 +643,13 @@ mod test {
     fn test_reads_do_not_extend_ttl() {
         // Read-only functions must not bump the instance TTL: an unbounded
         // read flood from any caller would otherwise keep the contract alive
-        // forever. init + deposit already extended it, so a subsequent read
-        // must leave it exactly unchanged.
+        // forever. The constructor + deposit already extended it, so a
+        // subsequent read must leave it exactly unchanged.
         let env = Env::default();
-        let (admin, user, asset, client) = setup(&env);
+        let (admin, user, asset, _client) = setup(&env);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client2 = CreditEscrowClient::new(&env, &contract_id);
-        client2.init(&admin, &asset);
 
         StellarAssetClient::new(&env, &asset)
             .mock_all_auths()
@@ -683,17 +691,27 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Contract already initialized")]
-    fn test_double_init_panics() {
+    fn test_constructor_initializes_atomically() {
+        // Initialization runs inside `env.register` — the same transaction as
+        // deployment — so there is no separate `init` call an attacker could
+        // race between deploy and init to install themselves as admin.
         let env = Env::default();
         let admin = Address::generate(&env);
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
-        client.init(&admin, &asset);
+
+        // Reads succeed straight away: the config was written during deploy.
+        let user = Address::generate(&env);
+        assert_eq!(client.balance(&user), 0i128);
+        assert_eq!(client.get_revenue(), 0i128);
+
+        // A second deployment is a different contract; nothing can
+        // re-initialize this one, because no such entry point exists.
+        let other = env.register(CreditEscrow, (&admin, &asset));
+        assert_ne!(contract_id, other);
     }
 
     // ── Authorization tests (real require_auth, no mock_all_auths) ──
@@ -701,7 +719,7 @@ mod test {
     #[test]
     fn test_deposit_requires_user_auth() {
         let env = Env::default();
-        let (admin, user, asset, client) = setup(&env);
+        let (_admin, user, asset, client) = setup(&env);
 
         StellarAssetClient::new(&env, &asset)
             .mock_all_auths()
@@ -747,7 +765,7 @@ mod test {
     #[should_panic(expected = "Amount must be positive")]
     fn test_negative_charge_rejected() {
         let env = Env::default();
-        let (_admin, user, asset, client) = setup(&env);
+        let (_admin, user, _asset, client) = setup(&env);
 
         let quote_id = String::from_str(&env, "quote-neg");
         client.mock_all_auths().charge(&user, &-100i128, &quote_id);
@@ -802,9 +820,8 @@ mod test {
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
 
         // Deposit 500 USDC into escrow, then mint the same amount to the
         // contract so a refund transfer can pay out.
@@ -898,7 +915,7 @@ mod test {
     #[test]
     fn test_withdraw_revenue_transfers_to_destination() {
         let env = Env::default();
-        let (admin, user, asset, client) = setup(&env);
+        let (_admin, user, asset, client) = setup(&env);
         let revenue_dest = Address::generate(&env);
 
         StellarAssetClient::new(&env, &asset)
@@ -967,7 +984,7 @@ mod test {
     #[test]
     fn test_partial_revenue_withdrawal() {
         let env = Env::default();
-        let (admin, user, asset, client) = setup(&env);
+        let (_admin, user, asset, client) = setup(&env);
         let dest = Address::generate(&env);
 
         StellarAssetClient::new(&env, &asset)
@@ -1012,7 +1029,7 @@ mod test {
     #[should_panic(expected = "Insufficient accumulated revenue")]
     fn test_withdraw_revenue_exceeding_accumulated_panics() {
         let env = Env::default();
-        let (admin, user, asset, client) = setup(&env);
+        let (_admin, user, asset, client) = setup(&env);
         let dest = Address::generate(&env);
 
         StellarAssetClient::new(&env, &asset)
@@ -1056,7 +1073,7 @@ mod test {
     #[test]
     fn test_set_admin_transfers_control() {
         let env = Env::default();
-        let (admin, user, asset, client) = setup(&env);
+        let (_admin, _user, _asset, client) = setup(&env);
         let new_admin = Address::generate(&env);
 
         client.mock_all_auths().set_admin(&new_admin);
@@ -1111,9 +1128,7 @@ mod test {
 
         // Register CreditEscrow last so it is the "current contract" whose
         // instance TTL the test reads below.
-        let contract_id = env.register(CreditEscrow, ());
-        let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
 
         // Storage access from tests must run in the contract's context.
         let ttl = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
@@ -1142,9 +1157,8 @@ mod test {
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
 
         let token_client = token::Client::new(&env, &asset);
 
@@ -1219,9 +1233,8 @@ mod test {
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
 
         let token_client = token::Client::new(&env, &asset);
 
@@ -1270,9 +1283,8 @@ mod test {
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
 
         let token_client = token::Client::new(&env, &asset);
 
@@ -1312,9 +1324,8 @@ mod test {
 
         // Register CreditEscrow last so it is the "current contract" whose
         // instance TTL the test reads below.
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
 
         StellarAssetClient::new(&env, &asset)
             .mock_all_auths()
@@ -1358,9 +1369,8 @@ mod test {
         let token_admin = Address::generate(&env);
         let asset = env.register_stellar_asset_contract(token_admin);
 
-        let contract_id = env.register(CreditEscrow, ());
+        let contract_id = env.register(CreditEscrow, (&admin, &asset));
         let client = CreditEscrowClient::new(&env, &contract_id);
-        client.init(&admin, &asset);
 
         StellarAssetClient::new(&env, &asset)
             .mock_all_auths()
