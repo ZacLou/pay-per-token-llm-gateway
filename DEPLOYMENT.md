@@ -35,21 +35,22 @@ Go to [railway.app](https://railway.app) and sign up with GitHub.
 1. Select the gateway service from your repo
 2. Under **Settings** → **Environment**, add:
 
-| Variable                            | Value                                                      |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `NODE_ENV`                          | `production`                                               |
-| `STELLAR_NETWORK`                   | `testnet`                                                  |
-| `DATABASE_URL`                      | `${{Postgres.DATABASE_URL}}` (Railway reference)           |
-| `REDIS_URL`                         | `${{Redis.REDIS_URL}}` (Railway reference)                 |
-| `JWT_SECRET`                        | (Generate: `openssl rand -base64 32`)                      |
-| `PUBLIC_GATEWAY_URL`                | `https://your-gateway.up.railway.app` — the **public** URL |
-| `TRUST_PROXY`                       | `1` (Railway terminates TLS one hop away)                  |
-| `USDC_ISSUER`                       | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` |
-| `CORS_ORIGINS`                      | `https://your-dashboard.vercel.app`                        |
-| `UPSTREAM_API_KEY_YOUR_PROVIDER_ID` | `sk-your-openai-api-key`                                   |
-| `PORT`                              | `3000`                                                     |
-| `HORIZON_TIMEOUT_MS`                | `10000` (optional, per-request Horizon timeout)            |
-| `SOROBAN_RPC_TIMEOUT_MS`            | `10000` (optional, per-request Soroban RPC timeout)        |
+| Variable                            | Value                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `NODE_ENV`                          | `production`                                                                         |
+| `STELLAR_NETWORK`                   | `testnet`                                                                            |
+| `DATABASE_URL`                      | `${{Postgres.DATABASE_URL}}` (Railway reference)                                     |
+| `REDIS_URL`                         | `${{Redis.REDIS_URL}}` (Railway reference)                                           |
+| `JWT_SECRET`                        | (Generate: `openssl rand -base64 32`)                                                |
+| `PUBLIC_GATEWAY_URL`                | `https://your-gateway.up.railway.app` — the **public** URL                           |
+| `TRUST_PROXY`                       | `1` (Railway terminates TLS one hop away)                                            |
+| `USDC_ISSUER`                       | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`                           |
+| `CORS_ORIGINS`                      | `https://your-dashboard.vercel.app`                                                  |
+| `UPSTREAM_API_KEY_YOUR_PROVIDER_ID` | `sk-your-openai-api-key`                                                             |
+| `PORT`                              | `3000`                                                                               |
+| `HORIZON_TIMEOUT_MS`                | `10000` (optional, per-request Horizon timeout)                                      |
+| `SOROBAN_RPC_TIMEOUT_MS`            | `10000` (optional, per-request Soroban RPC timeout)                                  |
+| `RUN_MIGRATIONS_ON_START`           | `true` (optional) — set `false` only if migrations are applied outside the container |
 
 3. Under **Settings** → **Build**, set:
    - **Dockerfile path**: `infrastructure/docker/Dockerfile.gateway`
@@ -77,6 +78,50 @@ production `DATABASE_URL`. The gateway still refuses to start against an
 unmigrated database either way (`apps/gateway/src/common/schema-guard.ts`).
 
 Note the gateway URL (e.g., `https://x402-gateway.up.railway.app`).
+
+### 1.5 Verify the gateway BEFORE deploying the dashboard
+
+**Do this first.** Deploying the dashboard against an unreachable gateway
+produces a dashboard that renders `Connecting...` and `...` indefinitely, with
+no obvious cause — exactly how the live outage presented. Proving the gateway
+works first makes any later problem unambiguously a dashboard problem. Setting
+`NEXT_PUBLIC_GATEWAY_URL` in Vercel **cannot** rescue an unreachable gateway.
+
+```bash
+GW=https://your-gateway.up.railway.app
+
+# 1. Readiness — both dependencies must report "ok".
+#    A 503 names the dependency that failed.
+curl -s "$GW/health/ready"
+
+# 2. The unpaid flow must return 402 with a usable status URL.
+curl -s -X POST "$GW/api/v1/chat/completions" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Read the 402 body: `statusUrl` must be the **public** URL you set in
+`PUBLIC_GATEWAY_URL`. If it shows `http://0.0.0.0:3000/...`, the variable is not
+set and every paying client receives a status link they cannot poll.
+
+Optionally, prove the whole wiring locally before spending time on hosting —
+this boots Postgres, Redis and the gateway and asserts the dashboard's own API
+client receives real data:
+
+```bash
+pnpm e2e:dashboard
+```
+
+#### Troubleshooting
+
+| Symptom                                                           | Cause                                                                                           | Fix                                                                                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Container exits; log says `Database schema is not migrated`       | Migrations failed, or were disabled                                                             | Leave `RUN_MIGRATIONS_ON_START` at its default (`true`), or run `pnpm db:migrate:deploy` against the production DB                |
+| `/health/ready` returns **503** with `database` failed            | `DATABASE_URL` doesn't reference the Postgres service                                           | Set it to `${{Postgres.DATABASE_URL}}`                                                                                            |
+| 402 body has `statusUrl: http://0.0.0.0:3000/...`                 | `PUBLIC_GATEWAY_URL` unset                                                                      | Set it to the public gateway URL                                                                                                  |
+| Dashboard stuck on `Connecting...` / metrics stuck at `...`       | `NEXT_PUBLIC_GATEWAY_URL` missing from the Vercel build, or the gateway isn't browser-reachable | Verify the gateway above, set the variable in Vercel, then **redeploy** — it is inlined at build time, so a redeploy is mandatory |
+| Browser console reports a CORS error                              | The dashboard's origin isn't in the gateway's allow-list                                        | Add it to `CORS_ORIGINS` (comma-separated), e.g. `https://your-dashboard.vercel.app`                                              |
+| `NEXT_PUBLIC_GATEWAY_URL` set in Vercel but the site is unchanged | The value is baked in at build time; an existing deployment keeps the old bundle                | Trigger a new deployment                                                                                                          |
 
 ---
 

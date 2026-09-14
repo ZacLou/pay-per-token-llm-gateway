@@ -373,6 +373,25 @@ curl -X POST http://localhost:3000/api/v1/chat/completions \
   }'
 ```
 
+### 7. Prove the dashboard actually talks to the gateway
+
+```bash
+pnpm e2e:dashboard
+```
+
+One command, full stack: boots Postgres + Redis + the gateway on isolated
+ports, then drives the **dashboard's own API client**
+(`apps/dashboard/src/lib/api.ts`) against it and asserts every page's data
+source returns real rows — providers, routes, payments, audit log,
+notifications, analytics — and that a 402 moves the analytics counters. It then
+production-builds the dashboard and asserts `NEXT_PUBLIC_GATEWAY_URL` landed in
+the **client** bundle, which is the check that catches the `localhost:3000`
+class of bug (unit tests can't, because they inject a fake env object).
+Evidence is written to `docs/evidence/dashboard-e2e.json`.
+
+No Stellar network access is required — this verifies stack wiring, not
+payments. For a real on-chain flow use `scripts/testnet-journey.sh`.
+
 ### 🌐 Networks
 
 The gateway supports both `testnet` and `mainnet` via the `STELLAR_NETWORK` environment variable. When deploying to `mainnet`, ensure you update the following variables to their production counterparts:

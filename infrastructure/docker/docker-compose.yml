@@ -56,6 +56,14 @@ services:
       # Applied by the image entrypoint before the gateway starts, so a fresh
       # `docker compose up` never boots against an empty schema. Idempotent.
       RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}
+      # Public base URL the gateway puts in 402 quotes (statusUrl +
+      # instructions). Without it the gateway falls back to
+      # `http://0.0.0.0:3000`, which no client can reach — so paying clients
+      # get a status URL they cannot poll. Derived from
+      # NEXT_PUBLIC_GATEWAY_URL because it IS the same URL (the dashboard is
+      # built with that value and calls it directly), which keeps the two from
+      # drifting. Override PUBLIC_GATEWAY_URL only if they genuinely differ.
+      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}}
     depends_on:
       postgres:
         condition: service_healthy

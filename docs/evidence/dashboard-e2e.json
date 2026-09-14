@@ -1,0 +1,55 @@
+{
+  "runAt": "2026-09-14T15:49:48.463Z",
+  "gatewayUrl": "http://127.0.0.1:3200",
+  "wallet": "GBW3LGL7QM7UV4UGIJXDJKI7POUFVKWVVTTYWLTNNUO4TZC6BQ4LQVXO",
+  "steps": {
+    "seed": {
+      "providerId": "dashboard-e2e-provider",
+      "routeId": "b9ab3aaf-bd74-4a20-9d69-e95ad749400b",
+      "model": "dashboard-e2e-model"
+    },
+    "auth": {
+      "verified": true,
+      "address": "GBW3LGL7QM7UV4UGIJXDJKI7POUFVKWVVTTYWLTNNUO4TZC6BQ4LQVXO",
+      "challengeLength": 68
+    },
+    "providers": {
+      "count": 1,
+      "first": "Dashboard E2E Provider"
+    },
+    "routes": {
+      "count": 1,
+      "path": "/v1/chat/completions",
+      "model": "dashboard-e2e-model"
+    },
+    "payments": {
+      "total": 1,
+      "returned": 1,
+      "status": "pending"
+    },
+    "auditLogs": {
+      "total": 1,
+      "returned": 1,
+      "action": "quote_generated"
+    },
+    "notifications": {
+      "total": 0,
+      "unread": 0
+    },
+    "analytics": {
+      "before": {
+        "totalRequests": 0,
+        "unpaidRequests": 0
+      },
+      "after": {
+        "totalRequests": 1,
+        "paidRequests": 0,
+        "unpaidRequests": 1,
+        "totalRevenue": "0",
+        "successRate": 0,
+        "averageResponseTime": 0
+      }
+    }
+  },
+  "passed": true
+}

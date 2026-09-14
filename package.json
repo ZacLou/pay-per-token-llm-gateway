@@ -19,6 +19,7 @@
     "lint:fix": "nx run-many --target=lint --all --fix",
     "test": "nx run-many --target=test --all",
     "test:e2e": "nx run-many --target=test:e2e --all",
+    "e2e:dashboard": "bash scripts/dashboard-e2e.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "nx run database:generate",

@@ -84,6 +84,13 @@ services:
       MULTISIG_CONTRACT: ${MULTISIG_CONTRACT:?MULTISIG_CONTRACT is required — mainnet contract ID}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://x402-dashboard.vercel.app}
       TRUST_PROXY: ${TRUST_PROXY:-0}
+      # Public base URL the gateway puts in 402 quotes. Derived from
+      # NEXT_PUBLIC_GATEWAY_URL — the same URL, already required for the
+      # dashboard build — so the two can never drift. Set PUBLIC_GATEWAY_URL
+      # explicitly to override. Compose refuses to start if neither is set,
+      # because a mainnet 402 quote pointing at an unreachable host is a
+      # paying customer who cannot poll their payment status.
+      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-${NEXT_PUBLIC_GATEWAY_URL:?set PUBLIC_GATEWAY_URL, or NEXT_PUBLIC_GATEWAY_URL which the dashboard build also needs}}
     depends_on:
       postgres:
         condition: service_healthy
