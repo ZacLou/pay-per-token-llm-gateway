@@ -1,30 +1,35 @@
 # 🏆 x402 LLM Gateway — Grant Submission Issue Summary
 
 > Curated issue set for **Stellar Wave (Drips)** & **GrantFox** submission — August 2026.
-> All 18 curated issues carry the `Stellar Wave` · `GrantFox OSS` · `Maybe Rewarded` · `bounty` labels.
-> **Status below describes the implementation state in this repository
-> (verified against the code and test suite) — updated 2026-09-14: all 18
-> issues are implemented and closed.**
 >
-> The GitHub-side state (labels, milestone, the Drips/Wave point ledger) is
-> not reproducible from the source tree, so it is no longer asserted here; the
-> per-issue evidence lives in
+> ## How to read this document
+>
+> Two different things are tracked below, and they have different evidence:
+>
+> | Claim                                                                            | Evidence                                                                                         |
+> | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+> | **Implemented in this repository**                                               | Source code + the test suite. Reproducible by anyone: `pnpm nx run-many --target=test --all`.    |
+> | **GitHub issue state** (labels, open/closed, milestone, Drips/Wave point ledger) | **Not reproducible from the source tree.** Asserted only by the linked GitHub issues themselves. |
+>
+> The `Status` columns below record the **implementation state in this
+> repository** as of the date on this document. They are **not** a claim about
+> the live GitHub issue state, which this file cannot verify. Reviewers should
+> confirm labels, open/closed state and the point ledger directly on GitHub.
+> The per-issue implementation notes live in
 > [`.github/WAVE8_ISSUES.md`](.github/WAVE8_ISSUES.md).
 
 ---
 
 ## 📊 At a Glance
 
-| Metric                    | Value                                                       |
-| ------------------------- | ----------------------------------------------------------- |
-| Curated issues            | **18** (10 original Wave-8 + 8 hardening/feature batch)     |
-| Open                      | **0**                                                       |
-| Implemented & closed      | **18** ✅                                                   |
-| Areas covered             | contracts, gateway, SDK, dashboard, notifications, database |
-| `good first issue` count  | **6**                                                       |
-| `security`-labeled count  | **4**                                                       |
-| Total points (all issues) | **2,700**                                                   |
-| Total points (open only)  | **0**                                                       |
+| Metric                                                     | Value                                                       |
+| ---------------------------------------------------------- | ----------------------------------------------------------- |
+| Curated issues                                             | **18** (10 original Wave-8 + 8 hardening/feature batch)     |
+| Implemented in this repository (test-verified)             | **18**                                                      |
+| Areas covered                                              | contracts, gateway, SDK, dashboard, notifications, database |
+| Declared `good first issue` count                          | **6** (as labeled on GitHub — not verifiable here)          |
+| Declared `security`-labeled count                          | **4** (as labeled on GitHub — not verifiable here)          |
+| Point value of the curated set (per the point model below) | **2,700**                                                   |
 
 **Point model:** High = 200 · Medium = 150 · Trivial = 100
 

@@ -9,6 +9,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   fetchPayments,
+  REQUEST_TIMEOUT_MS,
 } from './api';
 
 describe('in-memory session token', () => {
@@ -104,5 +105,62 @@ describe('notification API', () => {
     expect(url).toContain('page=2');
     expect(url).toContain('limit=20');
     expect(url).toContain('status=confirmed');
+  });
+});
+
+describe('gateway request timeout', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('bounds every request with an abort signal', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ unread: 0 }),
+      text: async () => '{}',
+    }) as unknown as typeof fetch;
+
+    await fetchUnreadNotificationCount();
+
+    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('rejects with an actionable message instead of hanging forever', async () => {
+    // Regression: an unreachable gateway left these promises pending, so the
+    // dashboard rendered a permanent `Connecting...`/loading wall. The request
+    // must fail fast and say what to check.
+    jest.useFakeTimers();
+    global.fetch = jest.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    ) as unknown as typeof fetch;
+
+    const pending = fetchNotifications();
+    jest.advanceTimersByTime(REQUEST_TIMEOUT_MS);
+
+    await expect(pending).rejects.toThrow(`timed out after ${REQUEST_TIMEOUT_MS}ms`);
+  });
+
+  it('names the gateway URL and CORS in the timeout message', async () => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    ) as unknown as typeof fetch;
+
+    const pending = fetchNotifications();
+    jest.advanceTimersByTime(REQUEST_TIMEOUT_MS);
+
+    await expect(pending).rejects.toThrow(/CORS_ORIGINS/);
   });
 });

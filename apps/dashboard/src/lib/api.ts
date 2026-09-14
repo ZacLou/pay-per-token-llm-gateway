@@ -9,8 +9,24 @@
  *      where cookies can't be sent (Vercel HTTPS → localhost HTTP).
  *      Token is stored in memory only, never localStorage (XSS-safe).
  */
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:3000';
+import { resolveGatewayUrl, gatewayConfigError } from './gatewayUrl';
+
+const GATEWAY_URL = resolveGatewayUrl();
 const BASE = `${GATEWAY_URL}/api/v1`;
+
+/**
+ * Hard ceiling on a single gateway call.
+ *
+ * Without it, an unreachable gateway (dead host, a black-holed proxy, or a
+ * browser blocking a private-network request from an HTTPS page) leaves the
+ * fetch promise pending for as long as the platform's TCP timeout allows.
+ * Every dashboard request stays "in flight", so the navbar renders a
+ * permanent `Connecting...` and each page a permanent loading state — the
+ * exact symptom the deployed dashboard showed against its inlined
+ * `localhost:3000`. 15s is far above a healthy round-trip and far below a
+ * user's patience.
+ */
+export const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS) || 15_000;
 
 /**
  * In-memory session token for cross-origin fallback.
@@ -51,6 +67,13 @@ function consumeLegacyToken(): string | null {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  // Fail fast with an actionable message rather than firing a request at an
+  // empty base URL (or, worse, an unintended localhost).
+  const configError = gatewayConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options?.headers as Record<string, string>) || {}),
@@ -66,11 +89,44 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${sessionToken}`;
   }
 
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  // Bound every call so a hanging request surfaces as an error the UI can
+  // render instead of an indefinite spinner. A caller-supplied signal is
+  // composed in so callers can still cancel earlier than the timeout.
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
+  const external = options?.signal ?? null;
+  const relayAbort = () => controller.abort();
+  if (external) {
+    if (external.aborted) controller.abort();
+    else external.addEventListener('abort', relayAbort, { once: true });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (timedOut) {
+      throw new Error(
+        `Gateway request to ${GATEWAY_URL} timed out after ${REQUEST_TIMEOUT_MS}ms. ` +
+          'The gateway is unreachable from this browser — verify NEXT_PUBLIC_GATEWAY_URL and that ' +
+          "the gateway's CORS_ORIGINS includes this dashboard's origin.",
+      );
+    }
+    throw err instanceof Error ? err : new Error(String(err));
+  } finally {
+    clearTimeout(timer);
+    if (external) external.removeEventListener('abort', relayAbort);
+  }
 
   if (!res.ok) {
     const body = await res.text();

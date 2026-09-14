@@ -91,9 +91,14 @@ jobs:
       #        VERCEL_TOKEN       → vercel.com/account/tokens
       #        VERCEL_ORG_ID      → Vercel project → Settings → General → Team ID
       #        VERCEL_PROJECT_ID  → Vercel project → Settings → General → Project ID
-      #   3. Set NEXT_PUBLIC_GATEWAY_URL in the Vercel project env (or replace the
-      #      placeholder in apps/dashboard/vercel.json) so the /api/gateway/*
-      #      rewrites point at the real Railway gateway URL.
+      #   3. Set NEXT_PUBLIC_GATEWAY_URL in the Vercel project env to the PUBLIC
+      #      gateway URL. The dashboard calls the gateway directly from the
+      #      browser, and NEXT_PUBLIC_* values are inlined into the client
+      #      bundle at BUILD time — so a change requires a rebuild, and the URL
+      #      must be reachable from the public internet. The gateway's
+      #      CORS_ORIGINS must also include this dashboard's origin.
+      #      Verify locally with `bash scripts/vercel-deploy-check.sh`, which
+      #      asserts the value actually landed in the built client assets.
       - name: Deploy to Vercel
         if: env.HAS_VERCEL_SECRET == 'true'
         uses: amondnet/vercel-action@v42

@@ -53,7 +53,7 @@ const OPS_PER_WALK: usize = 24;
 /// every token the contract holds is either a user's escrow balance or
 /// un-withdrawn revenue — never both, never missing.
 fn assert_accounting_invariant(
-    env: &Env,
+    _env: &Env,
     contract_id: &Address,
     client: &CreditEscrowClient,
     token_client: &TokenClient,

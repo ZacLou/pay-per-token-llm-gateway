@@ -403,6 +403,15 @@ export class ProxyController {
         },
       });
 
+      // Record the failure so the dashboard's failed-verification time-series
+      // is real data. Nothing writes `payment:failed` otherwise, which left
+      // that metric permanently at zero.
+      await this.analyticsService
+        .recordPaymentFailed(route.path, route.providerId, verification.payerAddress || 'unknown')
+        .catch((err) =>
+          logger.error('Analytics recordPaymentFailed error', { traceId, error: String(err) }),
+        );
+
       // Notify provider of verification failure
       this.webhooksService
         .notifyVerificationFailed(route.providerId, {

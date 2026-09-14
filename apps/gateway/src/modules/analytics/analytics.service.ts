@@ -56,26 +56,6 @@ export class AnalyticsService {
     });
   }
 
-  /** Record a verified payment event. */
-  async recordPaymentVerified(
-    route: string,
-    providerId: string,
-    callerAddress: string,
-    amount: string,
-    asset: string,
-  ) {
-    await prisma.analyticsEvent.create({
-      data: {
-        type: 'payment:verified',
-        route,
-        providerId,
-        callerAddress,
-        amount: BigInt(amount),
-        asset,
-      },
-    });
-  }
-
   /** Record a failed payment verification. */
   async recordPaymentFailed(route: string, providerId: string, callerAddress: string) {
     await prisma.analyticsEvent.create({
@@ -84,24 +64,6 @@ export class AnalyticsService {
         route,
         providerId,
         callerAddress,
-      },
-    });
-  }
-
-  /** Record a forwarded request with response time. */
-  async recordForwarded(
-    route: string,
-    providerId: string,
-    callerAddress: string,
-    responseTime: number,
-  ) {
-    await prisma.analyticsEvent.create({
-      data: {
-        type: 'request:forwarded',
-        route,
-        providerId,
-        callerAddress,
-        responseTime,
       },
     });
   }
@@ -140,11 +102,15 @@ export class AnalyticsService {
           },
           _sum: { amount: true },
         }),
-        // Average response time from forwarded events
+        // Average response time across forwarded (paid) requests. This must
+        // read `request:paid` — the event the proxy actually writes with a
+        // `responseTime` — because nothing ever writes a separate forwarded
+        // event. Reading a type that is never produced made this dashboard
+        // metric a permanent 0ms.
         prisma.analyticsEvent.aggregate({
           where: {
             ...where,
-            type: 'request:forwarded',
+            type: 'request:paid',
             responseTime: { not: null },
           },
           _avg: { responseTime: true },

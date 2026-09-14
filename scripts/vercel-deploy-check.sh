@@ -105,6 +105,46 @@ if [ "$DEPLOY" = "true" ]; then
   vercel deploy --prebuilt --prod
 fi
 
+# ── Post-build assertion: the gateway URL actually reached the CLIENT bundle ──
+#
+# `vercel build` succeeding proves nothing about the dashboard's ability to
+# reach the gateway. Next.js only inlines the literal expression
+# `process.env.NEXT_PUBLIC_*` into the browser assets, and a production build
+# that ships without one renders a dead dashboard. A live production deployment
+# regressed exactly this way.
+run_step "Assert NEXT_PUBLIC_GATEWAY_URL was inlined into the client bundle"
+
+BUILD_DIR="${DASHBOARD_DIR}/.vercel/output"
+if [ ! -d "$BUILD_DIR" ]; then
+  echo "⚠️  $BUILD_DIR not found — skipping the client-bundle assertion."
+else
+  # `vercel pull` writes the project's production env here.
+  PULLED_ENV="${DASHBOARD_DIR}/.vercel/.env.production.local"
+  EXPECTED=""
+  if [ -f "$PULLED_ENV" ]; then
+    EXPECTED="$(grep -E '^NEXT_PUBLIC_GATEWAY_URL=' "$PULLED_ENV" | tail -1 | cut -d= -f2- | tr -d '"'"'"' ')"
+  fi
+  EXPECTED="${EXPECTED:-${NEXT_PUBLIC_GATEWAY_URL:-}}"
+
+  if [ -n "$EXPECTED" ]; then
+    if grep -rqF "$EXPECTED" "$BUILD_DIR/static" 2>/dev/null; then
+      echo "✅ NEXT_PUBLIC_GATEWAY_URL is inlined into the client bundle ($EXPECTED)."
+    else
+      echo "❌ NEXT_PUBLIC_GATEWAY_URL ($EXPECTED) is NOT in the built client assets." >&2
+      echo "   The deployed dashboard would fall back to http://localhost:3000 and never load data." >&2
+      exit 1
+    fi
+  else
+    echo "⚠️  NEXT_PUBLIC_GATEWAY_URL is not set for this build — the production dashboard"
+    echo "    has no gateway to call and will render a configuration error."
+  fi
+
+  if grep -rqF 'localhost:3000' "$BUILD_DIR/static" 2>/dev/null; then
+    echo "   (note: the DEV_GATEWAY_URL constant is present in the bundle — expected, and"
+    echo "    only selected when NODE_ENV !== 'production'.)"
+  fi
+fi
+
 echo ""
 echo "✅ Vercel deploy pipeline check passed — the dashboard builds cleanly from apps/dashboard."
 echo "   Reminder: in Vercel → Settings → Build & Development Settings, Build Command"

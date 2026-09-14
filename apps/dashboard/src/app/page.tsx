@@ -20,9 +20,10 @@ import {
 } from 'recharts';
 import { useAnalytics, useProvider, useTimeSeries } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
+import { resolveGatewayUrl } from '@/lib/gatewayUrl';
 import { format } from 'date-fns';
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:3000';
+const GATEWAY_URL = resolveGatewayUrl();
 
 /** Convert a stroop amount string to USDC units without float precision loss. */
 function formatStroops(stroops: string | undefined): string {
@@ -63,8 +64,16 @@ export default function DashboardPage() {
               'Your session has expired or you are not logged in.'
             ) : (
               <>
-                {(error as Error).message}. Make sure the gateway is running at{' '}
-                <code className="bg-gray-800 px-1 rounded">{GATEWAY_URL}</code>.
+                {(error as Error).message}
+                {GATEWAY_URL ? (
+                  <>
+                    {' '}
+                    Make sure the gateway is reachable at{' '}
+                    <code className="bg-gray-800 px-1 rounded">{GATEWAY_URL}</code> and that its{' '}
+                    <code className="bg-gray-800 px-1 rounded">CORS_ORIGINS</code> includes this
+                    dashboard's origin.
+                  </>
+                ) : null}
               </>
             )
           }

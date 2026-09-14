@@ -486,18 +486,28 @@ jobs:
             --tag x402-dashboard-probe:ci \
             .
 
-      - name: Assert the probe URL was inlined
+      - name: Assert the probe URL was inlined into the CLIENT bundle
         run: |
           set -euo pipefail
           docker create --name probe x402-dashboard-probe:ci
-          docker cp probe:/app/apps/dashboard/.next /tmp/probe-next
-          mkdir -p /tmp/probe-dist
-          docker cp probe:/app/dist /tmp/probe-dist 2>/dev/null || true
+          rm -rf /tmp/probe-static
+          mkdir -p /tmp/probe-static
+          # Assert on the *client* assets only (/dist/apps/dashboard/.next/static
+          # is the tree the production stage serves). Next.js inlines only the
+          # literal expression `process.env.NEXT_PUBLIC_*` into the browser
+          # bundle. The server-side manifests (routes-manifest.json,
+          # required-server-files.json, server.js) always contain the value
+          # because next.config.js reads the real process env at build time, so
+          # grepping all of .next — as this job used to — passed even when the
+          # client shipped the localhost fallback. That false pass is how the
+          # deployed dashboard ended up calling localhost:3000 while CI stayed
+          # green.
+          docker cp probe:/app/dist/apps/dashboard/.next/static /tmp/probe-static
           docker rm -f probe
-          if grep -rq "gw-arg-probe.invalid" /tmp/probe-next /tmp/probe-dist; then
+          if grep -rq "gw-arg-probe.invalid" /tmp/probe-static; then
             echo "OK: NEXT_PUBLIC_GATEWAY_URL was inlined into the client bundle"
           else
-            echo "::error::NEXT_PUBLIC_GATEWAY_URL was not inlined — check the ARG/ENV placement in Dockerfile.dashboard"
+            echo "::error::NEXT_PUBLIC_GATEWAY_URL was not inlined into the client bundle — check the ARG/ENV placement in Dockerfile.dashboard and that the dashboard reads it as the literal expression process.env.NEXT_PUBLIC_GATEWAY_URL (see apps/dashboard/src/lib/gatewayUrl.ts)"
             exit 1
           fi
 

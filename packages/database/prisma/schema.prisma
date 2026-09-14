@@ -177,7 +177,7 @@ model Notification {
 
 model AnalyticsEvent {
   id            String   @id @default(uuid())
-  type          String   // "request:paid" | "request:unpaid" | "payment:verified" | "payment:failed" | "request:forwarded"
+  type          String   // "request:paid" | "request:unpaid" | "payment:failed"
   route         String
   providerId    String
   callerAddress String?

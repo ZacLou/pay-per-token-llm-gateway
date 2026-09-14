@@ -87,14 +87,22 @@ FROM generate_series(0, 23) AS h
 CROSS JOIN LATERAL generate_series(1, 2 + floor(random() * 4)::int) AS i;
 
 -- ── Analytics: forwarded requests (drives the avg-response stat) ────
+--
+-- These are `request:paid` rows because that is the event the gateway's proxy
+-- actually writes when it forwards a paid request, and it is what the
+-- analytics summary averages `responseTime` over. It previously used a
+-- separate `request:forwarded` type that no code path ever produced, which
+-- made the dashboard's "Avg Response" stat read 0ms against a live gateway.
 INSERT INTO "AnalyticsEvent" (id, type, route, "providerId", "callerAddress",
-                              "responseTime", "createdAt")
+                              amount, asset, "responseTime", "createdAt")
 SELECT
   gen_random_uuid(),
-  'request:forwarded',
+  'request:paid',
   '/v1/chat/completions',
   'journey-provider',
   'GASW5TJM55OSITWKSSQTKOVLT523MV6ML7KDQBEOTREUARLW55UDBV7W',
+  50000,
+  'USDC',
   (150 + floor(random() * 520))::int,
   now() - ((23 - h) || ' hours')::interval + ((random() * 55)::int || ' minutes')::interval
 FROM generate_series(0, 23) AS h

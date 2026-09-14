@@ -97,25 +97,6 @@ describe('AnalyticsService', () => {
     });
   });
 
-  describe('recordPaymentVerified', () => {
-    it('creates a payment verified event', async () => {
-      (mockPrisma.analyticsEvent.create as jest.Mock).mockResolvedValue({ id: 'e1' });
-
-      await service.recordPaymentVerified(route, providerId, callerAddress, '750000', 'USDC');
-
-      expect(mockPrisma.analyticsEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'payment:verified',
-          route,
-          providerId,
-          callerAddress,
-          amount: BigInt('750000'),
-          asset: 'USDC',
-        },
-      });
-    });
-  });
-
   describe('recordPaymentFailed', () => {
     it('creates a payment failed event', async () => {
       (mockPrisma.analyticsEvent.create as jest.Mock).mockResolvedValue({ id: 'e1' });
@@ -124,24 +105,6 @@ describe('AnalyticsService', () => {
 
       expect(mockPrisma.analyticsEvent.create).toHaveBeenCalledWith({
         data: { type: 'payment:failed', route, providerId, callerAddress },
-      });
-    });
-  });
-
-  describe('recordForwarded', () => {
-    it('creates a forwarded request event', async () => {
-      (mockPrisma.analyticsEvent.create as jest.Mock).mockResolvedValue({ id: 'e1' });
-
-      await service.recordForwarded(route, providerId, callerAddress, 320);
-
-      expect(mockPrisma.analyticsEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'request:forwarded',
-          route,
-          providerId,
-          callerAddress,
-          responseTime: 320,
-        },
       });
     });
   });
@@ -198,6 +161,31 @@ describe('AnalyticsService', () => {
         { address: 'unknown', totalSpent: '0', requestCount: 2 },
       ]);
       expect(summary.topRoutes).toEqual([{ path: route, requestCount: 50, revenue: '40000000' }]);
+    });
+
+    it('averages response time from request:paid — the event the proxy actually writes', async () => {
+      mockOwnedProviders();
+      (mockPrisma.analyticsEvent.count as jest.Mock)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(0);
+      (mockPrisma.analyticsEvent.aggregate as jest.Mock)
+        .mockResolvedValueOnce({ _sum: { amount: BigInt('1000000') } })
+        .mockResolvedValueOnce({ _avg: { responseTime: 335 } });
+      (mockPrisma.analyticsEvent.groupBy as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      const summary = await service.getSummary(OWNER, providerId);
+
+      // Regression: this aggregate used to read `request:forwarded`, a type
+      // nothing in the gateway ever writes, so the dashboard's "Avg Response"
+      // stat was a permanent 0ms no matter how much traffic the gateway saw.
+      expect(mockPrisma.analyticsEvent.aggregate).toHaveBeenNthCalledWith(2, {
+        where: { providerId, type: 'request:paid', responseTime: { not: null } },
+        _avg: { responseTime: true },
+      });
+      expect(summary.averageResponseTime).toBe(335);
     });
 
     it('returns empty defaults when the wallet owns no providers and no provider filter', async () => {

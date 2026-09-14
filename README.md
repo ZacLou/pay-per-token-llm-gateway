@@ -276,11 +276,15 @@ x402-llm-gateway/
 │   ├── ci.yml                # Lint → Test → Build (with PostgreSQL + Redis services)
 │   └── deploy.yml            # Docker push + Soroban contract deployment (tag-triggered)
 │
-└── docs/                     # Documentation
-    ├── README.md
-    ├── DEPLOYMENT.md
-    ├── CONTRIBUTING.md
-    └── SECURITY.md
+└── docs/                     # Documentation assets
+    ├── dashboards/            # Grafana dashboard JSON
+    ├── evidence/              # Reproducible testnet-journey evidence
+    └── media/                 # Demo video, captions, thumbnail
+
+# Top-level documentation (not under docs/)
+#   README.md · ARCHITECTURE.md · API.md · DEPLOYMENT.md · OPERATIONS.md
+#   OBSERVABILITY.md · SECURITY.md · CONTRIBUTING.md · THREAT-MODEL.md
+#   MAINNET_READINESS.md · AUDIT.md · GAS-OPTIMIZATION.md
 ```
 
 ### Database Schema
@@ -588,9 +592,36 @@ The gateway Docker image includes Node.js, pnpm, Prisma client generation, and t
 
 ### Dashboard → Vercel
 
+The dashboard is a separate Vercel project whose **Root Directory must be set to
+`apps/dashboard`** (`apps/dashboard/vercel.json` configures the build for that
+root; there is no repository-root `vercel.json`).
+
 ```bash
-# vercel.json is pre-configured
-vercel --prod
+# From the repository root, with the Vercel project linked to apps/dashboard:
+vercel --prod --cwd apps/dashboard
+```
+
+The dashboard calls the gateway **directly from the browser**, so two settings
+are mandatory and both are easy to get wrong:
+
+1. **`NEXT_PUBLIC_GATEWAY_URL` must be set in the Vercel project's environment
+   variables and must be reachable from the public internet.** `NEXT_PUBLIC_*`
+   values are inlined into the client bundle at **build time**, so an existing
+   deployment does not pick up a change until it is rebuilt. It must be a URL a
+   _browser_ can reach — a GitHub Codespaces port URL, a `localhost` address, or
+   an in-cluster service name will all fail in production.
+2. **The gateway's `CORS_ORIGINS` must include the dashboard's origin**
+   (e.g. `https://your-dashboard.vercel.app`), or the browser blocks the
+   responses.
+
+If `NEXT_PUBLIC_GATEWAY_URL` is missing from a production build, the dashboard
+now fails closed and says so — it does **not** silently fall back to
+`http://localhost:3000` (see `apps/dashboard/src/lib/gatewayUrl.ts` for why that
+fallback was both a bug and invisible in `next build` output). Verify a build
+before deploying:
+
+```bash
+bash scripts/vercel-deploy-check.sh
 ```
 
 ### Docker
