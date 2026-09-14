@@ -601,13 +601,23 @@ always deploy the current WASM fresh rather than upgrading in place. See
 
 ### Gateway → Railway
 
-```bash
-# railway.json is pre-configured
-# Deploy via Railway dashboard or CLI
-railway up
-```
+Follow **[DEPLOYMENT.md § Part 1](./DEPLOYMENT.md#part-1-deploy-gateway-to-railway)**.
 
-The gateway Docker image includes Node.js, pnpm, Prisma client generation, and the NestJS build. Railway auto-provisions PostgreSQL and Redis.
+Two settings are **mandatory** and cannot come from a file — Railway retired
+Config as Code for new services, so there is no `railway.json` in this
+repository:
+
+| Setting                                | Value                                                        |
+| -------------------------------------- | ------------------------------------------------------------ |
+| Settings → Source → **Root Directory** | `/` — the Dockerfile needs the repository-root build context |
+| Settings → Build → **Dockerfile path** | `infrastructure/docker/Dockerfile.gateway`                   |
+
+Then set the environment variables and the `/health/ready` health check path as
+described there. The gateway Docker image includes Node.js, pnpm, Prisma client
+generation, and the NestJS build, and **applies the database migrations on
+boot** (`infrastructure/docker/docker-entrypoint.sh`), so a fresh deploy cannot
+come up against an empty schema. Railway provides PostgreSQL and Redis as
+project plugins; §1.3 wires them up.
 
 ### Dashboard → Vercel
 

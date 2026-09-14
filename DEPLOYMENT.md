@@ -30,6 +30,12 @@ Go to [railway.app](https://railway.app) and sign up with GitHub.
 3. Click **+ New** → **Database** → **Add PostgreSQL**
 4. Click **+ New** → **Database** → **Add Redis**
 
+> **Monorepo import:** Railway detects pnpm workspaces and stages one service per
+> deployable package, configured for Railpack (`pnpm --filter … build`). Those
+> services **cannot build the gateway** — it needs the repository-root build
+> context and the container image. Delete the auto-staged services, add a single
+> service from this repository, and configure it as in §1.3.
+
 ### 1.3 Configure the Gateway Service
 
 1. Select the gateway service from your repo
@@ -52,11 +58,32 @@ Go to [railway.app](https://railway.app) and sign up with GitHub.
 | `SOROBAN_RPC_TIMEOUT_MS`            | `10000` (optional, per-request Soroban RPC timeout)                                  |
 | `RUN_MIGRATIONS_ON_START`           | `true` (optional) — set `false` only if migrations are applied outside the container |
 
-3. Under **Settings** → **Build**, set:
+3. Under **Settings** → **Source**, set:
+   - **Root Directory**: `/` — the repository root. The Dockerfile copies the
+     pnpm workspace (`pnpm-lock.yaml`, `packages/`, `scripts/`) from the root, so
+     the build context must be the repository root and not `apps/gateway`.
+
+4. Under **Settings** → **Build**, set:
    - **Dockerfile path**: `infrastructure/docker/Dockerfile.gateway`
 
-4. Under **Settings** → **Deploy**, set:
-   - **Health Check Path**: `/health`
+5. Under **Settings** → **Deploy**, set:
+   - **Health Check Path**: `/health/ready`
+
+   Prefer the readiness endpoint over `/health`. Railway checks this path before
+   promoting the deployment, so a gateway that cannot reach Postgres or Redis
+   **fails the deploy** with that reason, instead of going live and answering 503
+   to every request. `/health` only proves the process started — if you would
+   rather the deployment succeed and surface dependency failures at request
+   time, use `/health` and rely on §1.5 step 1 for the check.
+
+> **These are service settings, not file-driven.** There is no `railway.json` in
+> this repository. Railway has retired Config as Code: new services **cannot opt
+> in**, and existing files stop being read on **2026-12-01**. The settings above —
+> with the environment table — are therefore the whole configuration, and the
+> Root Directory and Dockerfile path are not optional. For file-managed
+> configuration, Railway's replacement is Infrastructure as Code
+> (`.railway/railway.ts`, applied with `railway config plan` / `railway config
+apply`); a service cannot be managed by both systems at once.
 
 ### 1.4 Deploy
 
@@ -74,8 +101,11 @@ If the migrations fail, the container **exits** rather than serving traffic
 against a partial schema — read the Prisma error in the deploy logs. To manage
 migrations yourself instead (e.g. from CI), set
 `RUN_MIGRATIONS_ON_START=false` and run `pnpm db:migrate:deploy` against the
-production `DATABASE_URL`. The gateway still refuses to start against an
-unmigrated database either way (`apps/gateway/src/common/schema-guard.ts`).
+production `DATABASE_URL`. Railway can also run them as a pre-deploy step
+(`deploy.preDeployCommand`); if you use that, set
+`RUN_MIGRATIONS_ON_START=false` so they are not attempted twice. The gateway
+still refuses to start against an unmigrated database either way
+(`apps/gateway/src/common/schema-guard.ts`).
 
 Note the gateway URL (e.g., `https://x402-gateway.up.railway.app`).
 
