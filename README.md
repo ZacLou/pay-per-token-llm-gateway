@@ -43,6 +43,63 @@
 > are self-tested; no external audit has been completed) and a fresh
 > **mainnet contract deployment**.
 
+### Status at a glance
+
+Read this before citing anything below as shipped. The columns are strict:
+
+- **Implemented** — the code exists and is covered by the test suite.
+- **Testnet verified** — exercised end-to-end against **live Stellar Testnet**,
+  with on-chain evidence anyone can check independently.
+- **Publicly deployed** — reachable on the public internet _right now_.
+- **Production ready** — operated, monitored and hardened for real money.
+- **Mainnet ready** — the [`MAINNET_READINESS.md`](./MAINNET_READINESS.md) gate
+  is satisfied.
+
+| Component                    | Implemented | Testnet verified | Publicly deployed | Production ready | Mainnet ready |
+| ---------------------------- | :---------: | :--------------: | :---------------: | :--------------: | :-----------: |
+| Gateway API (NestJS)         |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
+| Provider dashboard (Next.js) |     ✅      |        ✅        |  ⚠️ stale build   |        ❌        |      ❌       |
+| Payment verification (x402)  |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
+| `credit-escrow` contract     |     ✅      |        ✅        |  ✅ testnet only  |        ❌        |      ❌       |
+| `payment-verifier` contract  |     ✅      |        ✅        |  ✅ testnet only  |        ❌        |      ❌       |
+| `multisig` contract          |     ✅      |        ✅        |  ✅ testnet only  |        ❌        |      ❌       |
+| TypeScript SDK               |     ✅      |        ✅        |   n/a (library)   |        ❌        |      ❌       |
+| Python / LangChain SDK       |     ✅      |        ⚠️        |   n/a (library)   |        ❌        |      ❌       |
+| Escrow settlement (metered)  |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
+| Webhook + email delivery     |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
+
+**In plain terms:** everything is built and Testnet-verified; **nothing is
+running in production**, and the project is **not mainnet-ready**.
+
+Two caveats behind the ⚠️ marks, because they matter for a fair reading:
+
+- **The dashboard is publicly reachable but not correct.** The deployment at
+  `pay-per-token-llm-gateway-dashboard.vercel.app` is a stale build that still
+  calls `http://localhost:3000`; with no gateway deployed it renders a
+  configuration error rather than data. The client-side fix is in `main` but has
+  not been redeployed, and **no gateway is hosted anywhere**, so the URL is not a
+  working demo. Treat the demo video as the demonstration of the product.
+- **Library and delivery rows are marked ⚠️ on Testnet verification** where this
+  repository's evidence does not cover them end-to-end (the Python SDK is tested
+  against mocks, not live Testnet; webhook/email delivery is exercised in unit
+  tests, not to a real external receiver).
+
+**Not started / planned** (tracked as issues, do not present as done):
+multi-provider load balancing ([#3](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/3)),
+an independent Soroban audit ([#83](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/83)),
+and the project-naming decision ([#84](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/84)).
+
+**[`docs/VERIFICATION.md`](./docs/VERIFICATION.md) is the authoritative account of
+what has actually been verified** — the exact commands, the real Testnet
+transaction hashes, and an explicit section listing what is _not_ verified.
+Start there before citing anything in this file.
+
+Machine-readable receipts live in [`docs/evidence/`](./docs/evidence):
+`testnet-journey.json` (a real USDC payment, its replay and forged-payment
+rejections) and `dashboard-e2e.json` (every dashboard data source returning real
+rows). Reproduce them with `bash scripts/testnet-journey.sh` and
+`bash scripts/dashboard-e2e.sh`.
+
 ---
 
 ## 🎬 Demo

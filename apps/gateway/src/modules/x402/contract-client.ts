@@ -10,7 +10,7 @@
 
 import { xdr, Keypair } from '@stellar/stellar-sdk';
 import { logger } from '@x402/logger';
-import { accountAddressToScVal, amountToScVal } from './soroban-utils';
+import { accountAddressToScVal, amountToScVal, signAndSendContractTx } from './soroban-utils';
 
 /** JSON-RPC 2.0 response wrapper */
 interface RpcResponse<T = unknown> {
@@ -183,11 +183,7 @@ export async function recordPaymentOnChain(
 
     // The contract requires admin auth — sign the authorization entries and
     // the transaction envelope, then submit and wait for confirmation.
-    if (typeof tx.signAuthEntries === 'function') {
-      tx.signAuthEntries(adminKeypair);
-    }
-    tx.sign(adminKeypair);
-    await tx.send();
+    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     logger.info('[x402] Payment recorded on-chain', {
       txHash,

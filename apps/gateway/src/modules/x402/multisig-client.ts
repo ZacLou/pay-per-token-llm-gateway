@@ -15,7 +15,7 @@
 
 import { xdr, Keypair, Address } from '@stellar/stellar-sdk';
 import { logger } from '@x402/logger';
-import { accountAddressToScVal, amountToScVal } from './soroban-utils';
+import { accountAddressToScVal, amountToScVal, signAndSendContractTx } from './soroban-utils';
 
 // ── Public types ─────────────────────────────
 
@@ -102,11 +102,7 @@ export async function proposeMultisig(options: MultisigProposeOptions): Promise<
       amount: amountToScVal(amount),
     });
 
-    if (typeof tx.signAuthEntries === 'function') {
-      tx.signAuthEntries(adminKeypair);
-    }
-    tx.sign(adminKeypair);
-    await tx.send();
+    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     // The proposal id is the parsed return value of the invocation.
     const proposalId = Number(tx.result ?? 0);
@@ -168,11 +164,7 @@ export async function approveMultisig(options: MultisigApproveOptions): Promise<
 
     // The auth entry for `signer.require_auth()` is created by the SDK during
     // simulation; signing it with the signer's key proves authorization.
-    if (typeof tx.signAuthEntries === 'function') {
-      tx.signAuthEntries(signerKeypair);
-    }
-    tx.sign(signerKeypair);
-    await tx.send();
+    await signAndSendContractTx(tx, signerKeypair, networkPassphrase);
 
     const executed = Boolean(tx.result);
 

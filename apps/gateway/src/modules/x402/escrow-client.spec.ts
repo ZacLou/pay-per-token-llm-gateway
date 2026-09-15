@@ -12,7 +12,12 @@ jest.mock('@stellar/stellar-sdk', () => {
       ...actual.Keypair,
       fromSecret: (...args: unknown[]) => mockKeypairFromSecret(...args),
     },
+    // Spread the real namespace: the client under test now signs through the
+    // SDK's own `basicNodeSigner`, so replacing `contract` wholesale (as this
+    // mock used to) leaves that helper undefined and every call throws before
+    // it can send.
     contract: {
+      ...actual.contract,
       Client: {
         from: (...args: unknown[]) => mockClientFrom(...args),
       },
@@ -53,11 +58,11 @@ beforeEach(() => {
   // resetAllMocks (not just clear) so mockResolvedValueOnce queues from one
   // test never leak into the next.
   jest.resetAllMocks();
-  mockKeypairFromSecret.mockReturnValue({
-    sign: mockSign,
-    signAuthEntries: mockSignAuthEntries,
-    publicKey: () => adminKp.publicKey(),
-  });
+  // A real Keypair, not a hand-rolled stub: `basicNodeSigner` signs the
+  // envelope and the auth entries with it, so a fake without a working
+  // `sign()` cannot exercise the path at all — which is exactly how the
+  // original signing bug stayed hidden.
+  mockKeypairFromSecret.mockReturnValue(adminKp);
   mockClientFrom.mockResolvedValue({
     charge: jest.fn().mockResolvedValue(makeTx()),
     refund: jest.fn().mockResolvedValue(makeTx()),

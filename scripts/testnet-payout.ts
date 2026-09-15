@@ -34,7 +34,6 @@ import {
   rpc,
 } from '@stellar/stellar-sdk';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'crypto';
 import { prisma } from '@x402/database';
 
 // ── Config ────────────────────────────────────
@@ -374,6 +373,78 @@ function deployMultisigContract(sacId: string): string {
   return id;
 }
 
+/**
+ * The Stellar Asset Contract id for a classic asset, via the `stellar` CLI.
+ *
+ * A SAC id is `sha256` over a `HashIDPreimage::ContractId` envelope that binds
+ * the **network id**, so the same asset has a different SAC address on every
+ * network. The derivation here previously hashed the bare `ContractIdPreimage`
+ * and so omitted the network id entirely, producing a well-formed address with
+ * no contract behind it — every transfer to it failed simulation with
+ * `Error(Storage, MissingValue)`. The bundled `@stellar/stellar-sdk` 12.x also
+ * predates `HashIDPreimage.envelopeTypeContractId`, so the envelope cannot be
+ * built with it, which is the same limitation that already sends the deploy
+ * below through the CLI. Ask the CLI for the authoritative value.
+ */
+function sacIdForAsset(assetArg: string): string {
+  let out: string;
+  try {
+    out = execFileSync(
+      'stellar',
+      ['contract', 'id', 'asset', '--asset', assetArg, '--network', STELLAR_NETWORK],
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') {
+      throw new Error('the `stellar` CLI is required to derive SAC ids. Install it and re-run.');
+    }
+    const detail = err?.stderr?.toString?.() || err?.message || String(err);
+    throw new Error(`stellar contract id asset failed for ${assetArg}: ${detail}`);
+  }
+
+  const id = out.trim().split('\n').pop()?.trim() ?? '';
+  if (!StrKey.isValidContract(id)) {
+    throw new Error(
+      `stellar CLI returned an unexpected SAC id for ${assetArg}: ${JSON.stringify(out)}`,
+    );
+  }
+  return id;
+}
+
+/**
+ * Deploy the SAC for a classic credit asset, if the network does not have it.
+ *
+ * The native SAC is pre-deployed by the network, but a credit asset's SAC does
+ * not exist until it is deployed — and this journey mints its own USDC from a
+ * **freshly generated issuer on every run**. Transferring to a SAC that was
+ * never deployed fails simulation with `Error(Storage, MissingValue)`. Re-running
+ * against an issuer that already has its SAC is not an error, so that specific
+ * failure is tolerated.
+ */
+function deployAssetSac(assetArg: string): void {
+  try {
+    execFileSync(
+      'stellar',
+      [
+        'contract',
+        'asset',
+        'deploy',
+        '--asset',
+        assetArg,
+        '--source-account',
+        SIGNER_SECRET,
+        '--network',
+        STELLAR_NETWORK,
+      ],
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch (err: any) {
+    const detail = (err?.stderr?.toString?.() || err?.message || String(err)).toString();
+    if (/ExistingValue|already exists/i.test(detail)) return;
+    throw new Error(`stellar contract asset deploy failed for ${assetArg}: ${detail}`);
+  }
+}
+
 /** Phase 1 — deploy + fund a fresh threshold-1 multisig; persist its id. */
 async function deployMultisig(fs: typeof import('fs')) {
   // ── 1. Fund the signer (XLM) ──
@@ -390,14 +461,12 @@ async function deployMultisig(fs: typeof import('fs')) {
   // `deployMultisigContract` for why that goes through the `stellar` CLI.
   console.log('\n── Step 2: deploy fresh multisig (threshold 1, constructor args) ──');
 
-  // The SAC for the journey's classic USDC asset — deterministic address.
-  const assetXdr = USDC_ASSET.toXDRObject();
-  const sacId = StrKey.encodeContract(
-    createHash('sha256')
-      .update(xdr.ContractIdPreimage.contractIdPreimageFromAsset(assetXdr).toXDR())
-      .digest(),
-  );
+  // The two SACs the journey moves value through: the journey's classic USDC
+  // asset (provider revenue) and the native asset (the contract's storage rent).
+  const sacId = sacIdForAsset(`USDC:${USDC_ISSUER}`);
+  const nativeSacId = sacIdForAsset('native');
   console.log(`  USDC SAC: ${sacId}`);
+  console.log(`  native SAC: ${nativeSacId}`);
 
   // Idempotent re-run: reuse the multisig recorded by a previous deploy phase
   // rather than creating another contract (and another source of real USDC).
@@ -418,24 +487,29 @@ async function deployMultisig(fs: typeof import('fs')) {
   // ── 3. Fund the multisig account (XLM + USDC via the SAC) ──
   console.log('\n── Step 3: fund multisig with XLM + USDC ──');
 
-  // 3a. XLM for contract fees: the signer pays the contract account directly.
-  // The SDK's `Operation.payment` rejects C-address destinations, so build the
-  // PaymentOp XDR by hand (contract accounts are addressed by raw contract id).
-  const xlmPaymentOp = new xdr.Operation({
-    body: xdr.OperationBody.payment(
-      new xdr.PaymentOp({
-        destination: new xdr.MuxedAccount(
-          xdr.CryptoKeyType.keyTypeEd25519(),
-          StrKey.decodeContract(multisigId),
-        ),
-        asset: Asset.native().toXDRObject(),
-        amount: xdr.Int64.fromString('5000000'), // 5 XLM in stroops
+  // 3a. XLM for the contract's storage rent. A contract account cannot be the
+  // destination of a classic `payment`: a MuxedAccount only carries an ed25519
+  // key, so encoding the contract id as one (what this used to do) names an
+  // account that does not exist and Horizon rejects the op with
+  // `op_no_destination`. The native asset's SAC is the supported route — the
+  // same mechanism as the USDC transfer below — so the signer invokes
+  // `transfer` on it with the multisig as the destination.
+  const xlmFund = await sorobanTx(
+    signer.secret(),
+    [
+      Operation.invokeContractFunction({
+        contract: nativeSacId,
+        function: 'transfer',
+        args: [
+          xdr.ScVal.scvAddress(Address.fromString(signer.publicKey()).toScAddress()),
+          xdr.ScVal.scvAddress(Address.fromString(multisigId).toScAddress()),
+          amountToScVal('5000000'), // 5 XLM in stroops
+        ],
       }),
-    ),
-  });
-  const xlmFund = await buildSigned(signer.secret(), 'fund-multisig-xlm', [xlmPaymentOp]);
-  await submitSigned(signer.secret(), xlmFund.txXdr, 'fund-multisig-xlm');
-  console.log(`  multisig funded with 5 XLM: ${xlmFund.txHash}`);
+    ],
+    'fund-multisig-xlm',
+  );
+  console.log(`  multisig funded with 5 XLM via native SAC: ${xlmFund.hash}`);
 
   // 3b. Signer trustline + issuer mints 10 USDC to the signer.
   const trustline = await buildSigned(signer.secret(), 'signer-trustline', [
@@ -454,6 +528,9 @@ async function deployMultisig(fs: typeof import('fs')) {
   // a trustline the contract cannot sign; the SAC wraps the classic asset 1:1
   // and tracks contract balances internally, so the contract can later pay out
   // via `token.transfer` (as `approve` does at quorum).
+  // The USDC SAC must exist before anything can be transferred through it.
+  deployAssetSac(`USDC:${USDC_ISSUER}`);
+
   const sacTransfer = await sorobanTx(
     signer.secret(),
     [
@@ -471,7 +548,8 @@ async function deployMultisig(fs: typeof import('fs')) {
   );
   console.log(`  multisig credited 10 USDC via SAC: ${sacTransfer.hash}`);
   step('fund-multisig', {
-    xlmTxHash: xlmFund.txHash,
+    xlmTxHash: xlmFund.hash,
+    nativeSacId,
     sacTxHash: sacTransfer.hash,
     amount: '10 USDC',
     contractId: multisigId,
@@ -516,11 +594,36 @@ async function runPayout(fs: typeof import('fs')) {
       active: true,
     },
   });
+  // The revenue row below has to hang off a real route: `Payment.routeId` is a
+  // foreign key, so a hardcoded id that was never inserted fails the seed with
+  // a P2003 foreign-key violation before the payout flow can start.
+  const route = await prisma.route.upsert({
+    where: {
+      providerId_path_model: {
+        providerId: provider.id,
+        path: '/v1/chat/completions',
+        model: 'gpt-4-payout',
+      },
+    },
+    update: {},
+    create: {
+      providerId: provider.id,
+      path: '/v1/chat/completions',
+      upstreamUrl: 'https://httpbin.org/post',
+      model: 'gpt-4-payout',
+      pricingModel: 'flat',
+      flatPrice: '1000000',
+      acceptedAssets: ['USDC'],
+      rateLimit: 100,
+      active: true,
+    },
+  });
+
   // Confirmed revenue for the provider (as if the payer flow had run).
   await prisma.payment.create({
     data: {
       quoteId: `payout-quote-${Date.now()}`,
-      routeId: 'journey-payout-route',
+      routeId: route.id,
       providerId: provider.id,
       txHash: 'a'.repeat(64),
       payerAddress: 'G' + '1'.repeat(55),
@@ -530,7 +633,7 @@ async function runPayout(fs: typeof import('fs')) {
       verifiedAt: new Date(),
     },
   });
-  step('seed', { providerId: provider.id, revenueStroops: '1000000' });
+  step('seed', { providerId: provider.id, routeId: route.id, revenueStroops: '1000000' });
 
   // ── 5. Auth as the provider owner (challenge → sign → verify) ──
   console.log('\n── Step 5: authenticate as provider owner (wallet auth) ──');

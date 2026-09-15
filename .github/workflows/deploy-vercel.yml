@@ -32,32 +32,63 @@ jobs:
     runs-on: ubuntu-latest
     # `secrets` is not available in step-level `if:` expressions, so bridge the
     # presence check through job env — the same pattern deploy.yml uses for
-    # HAS_STELLAR_SECRET. Without it, a repo that has not been wired up to
-    # Vercel yet fails every push to main with the opaque action error
-    # "Input required and not supplied: vercel-token". A missing credential is
-    # a configuration gap, so it skips (with instructions) rather than fails.
+    # HAS_STELLAR_SECRET.
+    #
+    # A missing credential FAILS this job. It used to skip with a warning and
+    # still report success, which is worse than failing: this workflow exists to
+    # put the dashboard into production, so a green run that deployed nothing is
+    # a false signal. That is exactly how a stale production bundle — one still
+    # calling http://localhost:3000 — stayed live through nine consecutive
+    # "successful" runs, each of which finished in 5-11s having built nothing.
+    #
+    # For a fork, or before the project is wired up to Vercel at all, set the
+    # repository variable ALLOW_DEPLOY_SKIP=true to opt back into skipping. The
+    # opt-out is explicit, per-repository and logged in the run summary, so it
+    # can never be mistaken for a deploy.
     env:
       HAS_VERCEL_SECRET: ${{ secrets.VERCEL_TOKEN != '' }}
+      ALLOW_DEPLOY_SKIP: ${{ vars.ALLOW_DEPLOY_SKIP == 'true' }}
     steps:
-      - name: Vercel credentials not configured — skipping deploy
+      - name: Vercel credentials not configured
         if: env.HAS_VERCEL_SECRET != 'true'
         run: |
+          if [ "${ALLOW_DEPLOY_SKIP}" = 'true' ]; then
+            STATUS='skipped (ALLOW_DEPLOY_SKIP=true)'
+          else
+            STATUS='FAILED — credentials missing'
+          fi
+
           {
-            echo "### Dashboard deploy skipped"
+            echo "### Dashboard deploy ${STATUS}"
             echo ""
-            echo "\`VERCEL_TOKEN\` is not set, so the Vercel deploy step was skipped."
-            echo "This is a configuration gap, not a build failure."
+            echo "\`VERCEL_TOKEN\` is not set, so this workflow could not deploy the"
+            echo "dashboard to production. The live dashboard is whatever was last"
+            echo "deployed by hand or by Vercel's own Git integration — not this commit."
             echo ""
-            echo "To enable production dashboard deploys, add these repository secrets"
-            echo "under *Settings → Secrets and variables → Actions*:"
+            echo "Add these repository secrets under *Settings → Secrets and variables → Actions*:"
             echo ""
             echo "| Secret | Where to find it |"
             echo "| --- | --- |"
             echo "| \`VERCEL_TOKEN\` | vercel.com/account/tokens |"
             echo "| \`VERCEL_ORG_ID\` | Vercel project → Settings → General → Team ID |"
             echo "| \`VERCEL_PROJECT_ID\` | Vercel project → Settings → General → Project ID |"
+            echo ""
+            echo "Then, in the Vercel project: set \`NEXT_PUBLIC_GATEWAY_URL\` to the public"
+            echo "gateway URL (inlined into the client bundle at build time, so it needs a"
+            echo "rebuild), and make sure that gateway's \`CORS_ORIGINS\` lists this"
+            echo "dashboard's origin."
+            echo ""
+            echo "To deliberately skip instead of failing, set the repository variable"
+            echo "\`ALLOW_DEPLOY_SKIP\` to \`true\`."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=Dashboard deploy skipped::VERCEL_TOKEN is not set — see the job summary for setup instructions."
+
+          if [ "${ALLOW_DEPLOY_SKIP}" = 'true' ]; then
+            echo "::warning title=Dashboard deploy skipped::VERCEL_TOKEN is not set and ALLOW_DEPLOY_SKIP=true."
+            exit 0
+          fi
+
+          echo "::error title=Dashboard deploy cannot run::VERCEL_TOKEN is not set — the dashboard was NOT deployed. See the job summary, or set ALLOW_DEPLOY_SKIP=true to skip deliberately."
+          exit 1
 
       - uses: actions/checkout@v4
         if: env.HAS_VERCEL_SECRET == 'true'

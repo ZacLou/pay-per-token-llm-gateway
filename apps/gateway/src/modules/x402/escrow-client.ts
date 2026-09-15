@@ -11,7 +11,7 @@
 
 import { xdr, Keypair } from '@stellar/stellar-sdk';
 import { logger } from '@x402/logger';
-import { accountAddressToScVal, amountToScVal } from './soroban-utils';
+import { accountAddressToScVal, amountToScVal, signAndSendContractTx } from './soroban-utils';
 
 // ── Public API ───────────────────────────────
 
@@ -143,11 +143,7 @@ export async function chargeEscrow(options: EscrowChargeOptions): Promise<Escrow
       quote_id: xdr.ScVal.scvString(quoteId),
     });
 
-    if (typeof tx.signAuthEntries === 'function') {
-      tx.signAuthEntries(adminKeypair);
-    }
-    tx.sign(adminKeypair);
-    await tx.send();
+    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     logger.info('[escrow] Charge settled on-chain', {
       user: user.slice(0, 8),
@@ -197,11 +193,7 @@ export async function refundEscrow(options: EscrowRefundOptions): Promise<Escrow
       quote_id: xdr.ScVal.scvString(quoteId),
     });
 
-    if (typeof tx.signAuthEntries === 'function') {
-      tx.signAuthEntries(adminKeypair);
-    }
-    tx.sign(adminKeypair);
-    await tx.send();
+    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     logger.info('[escrow] Refund settled on-chain', {
       user: user.slice(0, 8),
