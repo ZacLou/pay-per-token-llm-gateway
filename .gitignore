@@ -9,8 +9,11 @@ build/
 .next/
 .nx/
 
-# Local testnet journey state (contains live secrets — never commit)
+# Local verification-run state. These directories hold generated gateway env
+# files (JWT_SECRET, DATABASE_URL) — never commit them.
 .testnet-journey/
+.dashboard-e2e/
+.failure-injection/
 
 # Environment
 .env
