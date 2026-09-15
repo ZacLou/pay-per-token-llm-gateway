@@ -37,4 +37,9 @@ for contract in "${CONTRACTS[@]}"; do
   (cd "${ROOT_DIR}/contracts/${contract}" && "${BUILD_CMD[@]}")
 done
 
+# The size gate is not a CI-only concern: `docs/VERIFICATION.md` documents this
+# command as "wasm + size gate", and the deploy path enforces the same limit
+# before uploading. Without it, an oversized artifact was only ever caught in CI.
+bash "${ROOT_DIR}/scripts/check-contract-sizes.sh"
+
 echo "✅ All contracts built"

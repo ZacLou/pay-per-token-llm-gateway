@@ -114,25 +114,23 @@ These counts are the ones this repository actually produces; the earlier
 
 ### Soroban contracts
 
-| Contract           | `cargo test`   | WASM  | Size gate (< 64 KiB) |
-| ------------------ | -------------- | ----- | -------------------- |
-| `payment-verifier` | **29 passed**  | 7 KiB | ✅                   |
-| `credit-escrow`    | **46 passed**  | 9 KiB | ✅                   |
-| `multisig`         | **36 passed**  | 7 KiB | ✅                   |
-| **Total**          | **111 passed** |       |                      |
+| Contract           | `cargo test`   | WASM artifact | Size gate (< 64 KiB) |
+| ------------------ | -------------- | ------------- | -------------------- |
+| `payment-verifier` | **29 passed**  | 7.4 KiB       | ✅ 7,569 bytes       |
+| `credit-escrow`    | **46 passed**  | 9.2 KiB       | ✅ 9,377 bytes       |
+| `multisig`         | **36 passed**  | 7.7 KiB       | ✅ 7,886 bytes       |
+| **Total**          | **111 passed** |               |                      |
 
 Suites include the accounting-invariant, replay, authorization, TTL and
 gas/storage benchmark tests.
 
-> **Not re-run in the 2026-09-15 re-audit:** no Rust toolchain (`cargo` / `rustc`)
-> is installed in this environment, so the 111 contract tests and the size gate
-> above are _reviewed, not re-executed_: the code was read and the specific
-> controls were confirmed present (`MAX_PAGE_SIZE` + `saturating_add` in all
-> three paginated getters, `extend_ttl` only on write paths), but the numbers
-> remain the 2026-09-14 run. Run `for c in payment-verifier credit-escrow
-multisig; do (cd contracts/$c && cargo test); done` to reproduce them — CI does
-> this on every push (`contracts` job), so the gate is live even though it was not
-> re-run here.
+> **Re-run locally 2026-09-15** — the toolchain _is_ present in this
+> environment: `cargo 1.98.1` / `rustc 1.98.1` at `~/.cargo/bin` (it is not on
+> `PATH`, which is why an earlier pass reported none). `cargo test` per contract
+> gave **29 / 46 / 36 passed, 0 failed** (111, including the gas/storage benches;
+> ~8 min in total), `cargo build --release --target wasm32-unknown-unknown`
+> produced the byte sizes above, and the size gate exited 0. CI runs the same
+> sequence on every push (`contracts` job).
 
 ### Dashboard against a live gateway
 
@@ -381,6 +379,7 @@ These were found by running the system, not by reading it.
 | 17  | **The Redis client permanently stopped reconnecting after ~6s of downtime.** `retryStrategy` returned `null` after 10 attempts, and ioredis reads `null` as "stop reconnecting" — _forever_. A Redis outage longer than the retry window left a running gateway unable to recover: `/health/ready` kept reporting Redis down and every Redis-backed surface kept failing, until the process was restarted. ioredis's own default never gives up (`Math.min(times * 50, 2000)`), so this was an override with a side effect its comment did not intend.                                                                                                                       | Caught by `scripts/failure-injection.sh`: the `redis-down` phase observed `redis: down` in readiness, then **failed to recover** within 60s of Redis restarting. With the strategy fixed, the same phase recovers. No unit test could see this.                         | Fixed — the strategy now backs off with a cap and never returns `null`; startup fail-fast is unchanged, since `onModuleInit` pings and throws.                                    |
 | 18  | **The SSRF guard classified non-public IPv6 as public — including `::`, which connects to localhost.** `isPublicIp` matched IPv6 by string prefix (`::1`, `fc`/`fd`, `fe8`–`feb`, `::ffff:`) and returned `true` for everything else, so `::` (the unspecified address), `ff00::/8` multicast, IPv4-compatible `::a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` (which carries an arbitrary IPv4 in groups 1–2) and Teredo `2001:0::/32` were all accepted as safe webhook/upstream targets. A provider pointing a route or webhook at a hostname with an AAAA record of `::` therefore reached the gateway's own loopback — an SSRF that needed no DNS rebinding at all. | `isPublicIp('::') === true`; on Linux `connect(::)` targets localhost. Expanded to eight groups and now admitted only when global unicast (`2000::/3`) with no embedded private IPv4 (6to4 and IPv4-mapped are decoded and re-classified); nine regression cases added. | **Fixed 2026-09-15** — `isPublicIp` + 9 new assertions in `webhooks.service.spec.ts`.                                                                                             |
 | 19  | **Running the Testnet journey deleted the escrow leg's evidence.** `testnet-journey.ts` wrote its receipt with `writeFileSync`, while `testnet-escrow.ts` and `testnet-payout.ts` _append_ their sections to the **same** file (`docs/evidence/testnet-journey.json`). Re-running the journey after the escrow leg dropped the whole `escrow` section, leaving §6 above citing evidence that was no longer in the file.                                                                                                                                                                                                                                                      | Reproduced live: `git diff` showed the `escrow` key disappearing from the evidence file after `bash scripts/testnet-journey.sh`.                                                                                                                                        | **Fixed 2026-09-15** — the journey now merges with the existing file (`{...existing, ...evidence}`) like the other two legs.                                                      |
+| 21  | **The 64 KiB contract size gate existed only in CI, though the docs advertise it locally.** `docs/VERIFICATION.md` documents `pnpm build:contracts` as `# wasm + size gate` and `CONTRIBUTING.md` sends contributors through it, but `scripts/build-contracts.sh` built the artifacts and printed `✅ All contracts built` without checking a size, and `scripts/deploy-contracts.sh` uploaded whatever it had just built. The limit was enforced by one CI step, on one platform (`stat -c%s` is GNU-only, so macOS contributors could not run it at all).                                                                                                                  | `git grep -n 65536` matched `ci.yml` only; `git show HEAD:scripts/build-contracts.sh` and the deploy script, grepped for `size`, returned nothing.                                                                                                                      | **Fixed 2026-09-15** — one shared `scripts/check-contract-sizes.sh`, run by CI, `pnpm build:contracts` and the deploy path; 9 fixtures pin the boundary.                          |
 | 20  | **Two source files carried an "All rights reserved" copyright header.** `apps/gateway/src/modules/payments/payments.service.ts` and its spec began with `// Author: RawNuke` / `// Copyright (c) 2026 RawNuke. All rights reserved.` — a notice incompatible with the repository's MIT `LICENSE` ("x402 LLM Gateway Contributors"), and the only two files in the tree with one. For an open-source evaluation this is a licensing red flag: it asserts exclusive rights over files a contributor is expected to reuse.                                                                                                                                                      | `grep -rl "All rights reserved"` matched exactly those two source files (everything else was build output).                                                                                                                                                             | **Fixed 2026-09-15** — both headers removed.                                                                                                                                      |
 
 ### Why the tests missed #1

@@ -179,6 +179,12 @@ for contract in payment-verifier credit-escrow multisig; do
   echo "════════ ${contract} ════════"
   (cd "${CONTRACTS_DIR}/${contract}" && stellar contract build)
   wasm="${CONTRACTS_DIR}/${contract}/target/wasm32-unknown-unknown/release/${contract//-/_}.wasm"
+
+  # Refuse to upload an artifact the network will reject: Soroban caps a
+  # contract at 64 KiB and a deploy failure otherwise surfaces mid-release as an
+  # opaque error. Same gate as CI and `pnpm build:contracts`.
+  bash "${ROOT_DIR}/scripts/check-contract-sizes.sh" "$wasm"
+
   case "$contract" in
     payment-verifier)
       deployed_id="$(deploy_contract "$contract" "$wasm" \

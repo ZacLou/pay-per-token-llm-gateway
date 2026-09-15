@@ -102,6 +102,22 @@ All notable changes to the x402 LLM Gateway project.
   the missing secrets in the job summary, using the same explicit
   `ALLOW_DEPLOY_SKIP=true` repository-variable opt-out as the Vercel workflow —
   the false-green deploy pattern documented in `docs/VERIFICATION.md` §7.
+- **The contract size gate now runs everywhere an artifact is built or shipped,**
+  not only in CI. `docs/VERIFICATION.md` documented `pnpm build:contracts` as
+  "wasm + size gate", but `scripts/build-contracts.sh` built and reported
+  success without checking anything, and `scripts/deploy-contracts.sh` uploaded
+  whatever it had just built — so the 64 KiB Soroban limit was enforced by one
+  CI step (via the GNU-only `stat -c%s`) and an oversized artifact could reach
+  the network before anything objected. There is now a single implementation,
+  `scripts/check-contract-sizes.sh`, invoked by the CI `contracts` job, by
+  `pnpm build:contracts`, and by the deploy script before each upload. It uses
+  `wc -c` (POSIX, so macOS contributors get the same gate), fails when an
+  artifact is missing instead of passing vacuously, and discovers it under
+  `target/*/release/` because `stellar contract build` has written
+  `wasm32v1-none` since CLI 23 while CI's `cargo build` writes
+  `wasm32-unknown-unknown`. Nine fixture cases pin the boundary (65,536 bytes
+  passes, 65,537 fails), oversize rejection, the missing-artifact failure and
+  the limit override.
 
 ---
 

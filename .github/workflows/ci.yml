@@ -344,16 +344,12 @@ jobs:
             (cd contracts/$c && cargo build --release --target wasm32-unknown-unknown)
           done
 
+      # One implementation of the gate, shared with `pnpm build:contracts` and
+      # scripts/deploy-contracts.sh, so the limit cannot drift between CI and
+      # what actually ships. It also fails when an artifact is missing entirely,
+      # which a bare glob-and-stat loop could only express as collateral damage.
       - name: Enforce contract size gate (< 64 KiB deploy limit)
-        run: |
-          for f in contracts/*/target/wasm32-unknown-unknown/release/*.wasm; do
-            sz=$(stat -c%s "$f")
-            echo "$f: $((sz/1024)) KiB"
-            if [ "$sz" -gt 65536 ]; then
-              echo "::error::Contract $f is $((sz/1024)) KiB — exceeds the 64 KiB Soroban deploy limit"
-              exit 1
-            fi
-          done
+        run: bash scripts/check-contract-sizes.sh
 
   build:
     name: Build
