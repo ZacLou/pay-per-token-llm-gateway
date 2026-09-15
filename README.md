@@ -67,7 +67,7 @@ Read this before citing anything below as shipped. The columns are strict:
 | Python / LangChain SDK       |     ✅      |        ⚠️        |   n/a (library)   |        ❌        |      ❌       |
 | Multisig payout automation   |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
 | Escrow settlement (metered)  |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
-| Webhook + email delivery     |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
+| Webhook + in-app delivery    |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
 
 **In plain terms:** everything is built and Testnet-verified; **nothing is
 running in production**, and the project is **not mainnet-ready**.
@@ -82,8 +82,13 @@ The caveats behind the remaining ⚠️ marks, because they matter for a fair re
   working demo. Treat the demo video as the demonstration of the product.
 - **Library and delivery rows are marked ⚠️ on Testnet verification** where this
   repository's evidence does not cover them end-to-end (the Python SDK is tested
-  against mocks, not live Testnet; webhook/email delivery is exercised in unit
-  tests, not to a real external receiver).
+  against mocks, not live Testnet; webhook and in-app delivery are exercised in
+  unit tests, and no webhook has been delivered to a real external receiver).
+- **There is no email channel.** The nodemailer handler was removed rather than
+  left half-wired: it was never registered in the dispatcher, its `EMAIL_*`/
+  `SMTP_*` config was inert and no recipient model existed. In-app notifications
+  are persisted in Postgres and served from `/api/v1/notifications`; webhooks are
+  HMAC-signed and SSRF-guarded. See [`MAINNET_READINESS.md`](./MAINNET_READINESS.md) §5.
 - **Escrow settlement is now Testnet-verified.** A per-token route charges the
   metered cost and refunds the unused surplus on-chain: `bash
 scripts/testnet-escrow.sh` deploys a fresh `credit-escrow`, has a user deposit
@@ -334,7 +339,7 @@ x402-llm-gateway/
 │   ├── wallet/               # Stellar wallet utilities (tx building, Horizon)
 │   ├── authentication/       # Wallet challenge-response auth
 │   ├── analytics/            # Usage & revenue analytics service
-│   ├── notifications/        # Email/webhook/in-app notification delivery
+│   ├── notifications/        # Webhook + in-app notification delivery
 │   ├── shared/               # General utilities (ID generation, timestamps)
 │   └── ui/                   # Shared UI utilities
 │

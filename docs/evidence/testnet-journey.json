@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-09-15T09:24:29.332Z",
+  "runAt": "2026-09-15T13:21:08.464Z",
   "network": "testnet",
   "gatewayUrl": "http://127.0.0.1:3100",
   "horizonUrl": "https://horizon-testnet.stellar.org",
@@ -7,53 +7,53 @@
   "steps": {
     "fund": {
       "issuer": "GBZEPCLP4KEPOQH5NC5R72BDRERNVAOUU63WQTY6ZIE66IL6CY3YIX3H",
-      "payer": "GAURAKDH52KINJK6OGR4O5Y7IOTTM6NWNVALZ4FLQHJBGML3SZYA3IQQ",
-      "receiver": "GCNE5T4BZCKKCSYNVEBX3COVO6HLRIH5TMTXRIEER2WACQBJCFSZSE3F"
+      "payer": "GB6FKS72C67HNQ5A2ZRNK5GBNGXOR6PL5KTKCJRX7YAWF74WMZ4QHNJW",
+      "receiver": "GCTDL5LW5IUVCFAFNN2ZI4362SZYRT4CB2BLM3D7HRUD54CS35WCWJOW"
     },
     "trustline": {
-      "payerTxHash": "422fce3022ed1cea4cc37a0c352696a9f1ea1943cf71ae478e1b75a1192bc59e",
-      "receiverTxHash": "3c9290659b2776d426dcea6615a5ca8a9a15e88437ca4f5f70135f2185b8d5fc",
+      "payerTxHash": "48fc2874d033e79d3a77cc7e9f79a9d4372381183f668db6e93a88106954ab6e",
+      "receiverTxHash": "f8f7bd4f1ada7def942f8946957da0580f068ab57c38161d58c48766a2f6fd75",
       "asset": "USDC:GBZEPCLP4KEPOQH5NC5R72BDRERNVAOUU63WQTY6ZIE66IL6CY3YIX3H"
     },
     "mint": {
-      "txHash": "b121f38397a00290cf40e5b0b12d3b41625665cf8f0c59c25cb74f1863cdfb52",
+      "txHash": "861c512e135561b6b9ccbcdfa910af90af26ddfdc01f8ec7208cbfe827eed951",
       "amount": "100 USDC"
     },
     "seed": {
       "providerId": "journey-provider",
-      "routeId": "765cd3a9-8988-41a6-8d13-f7a6ee8387de"
+      "routeId": "543fa712-84e1-442b-803d-f40edffd2077"
     },
     "quote": {
       "quote": {
-        "id": "3c516775-5c87-46df-92e8-4c8b4b4d6ece",
+        "id": "b082ed6d-27ef-46e2-bc2f-aac55c3f79f6",
         "route": "/v1/chat/completions",
         "pricingModel": "flat",
         "amount": "1000000",
         "asset": "USDC",
         "assetIssuer": "GBZEPCLP4KEPOQH5NC5R72BDRERNVAOUU63WQTY6ZIE66IL6CY3YIX3H",
-        "paymentAddress": "GCNE5T4BZCKKCSYNVEBX3COVO6HLRIH5TMTXRIEER2WACQBJCFSZSE3F",
-        "memo": "3c5167755c8746df92e84c8b",
+        "paymentAddress": "GCTDL5LW5IUVCFAFNN2ZI4362SZYRT4CB2BLM3D7HRUD54CS35WCWJOW",
+        "memo": "b082ed6d27ef46e2bc2faac5",
         "network": "testnet",
-        "issuedAt": 1789464293,
-        "expiresAt": 1789464593,
-        "statusUrl": "http://127.0.0.1:3100/api/v1/payments/3c516775-5c87-46df-92e8-4c8b4b4d6ece/status"
+        "issuedAt": 1789478492,
+        "expiresAt": 1789478792,
+        "statusUrl": "http://127.0.0.1:3100/api/v1/payments/b082ed6d-27ef-46e2-bc2f-aac55c3f79f6/status"
       }
     },
     "pay": {
-      "txHash": "01a594946e5e2a9a295ede9938e5b10047594033c00a9d126cec49b39d42702c",
-      "ledger": 4688142,
+      "txHash": "fbf2f72d0d6db5e70c12fba4d50a7299e1f1b259dad0d0e5fd15b140e978c48a",
+      "ledger": 4690982,
       "amount": "0.1 USDC",
-      "to": "GCNE5T4BZCKKCSYNVEBX3COVO6HLRIH5TMTXRIEER2WACQBJCFSZSE3F",
-      "memo": "3c5167755c8746df92e84c8b",
-      "horizon": "https://horizon-testnet.stellar.org/transactions/01a594946e5e2a9a295ede9938e5b10047594033c00a9d126cec49b39d42702c"
+      "to": "GCTDL5LW5IUVCFAFNN2ZI4362SZYRT4CB2BLM3D7HRUD54CS35WCWJOW",
+      "memo": "b082ed6d27ef46e2bc2faac5",
+      "horizon": "https://horizon-testnet.stellar.org/transactions/fbf2f72d0d6db5e70c12fba4d50a7299e1f1b259dad0d0e5fd15b140e978c48a"
     },
     "forward": {
       "status": 200,
       "receipt": {
-        "id": "84153c9d-dc4f-4f3f-b4db-c422d4d15fdd",
-        "quoteId": "3c516775-5c87-46df-92e8-4c8b4b4d6ece",
-        "txHash": "01a594946e5e2a9a295ede9938e5b10047594033c00a9d126cec49b39d42702c",
-        "payerAddress": "GAURAKDH52KINJK6OGR4O5Y7IOTTM6NWNVALZ4FLQHJBGML3SZYA3IQQ",
+        "id": "4331e9d0-9d96-4525-830b-8f16d61e4c58",
+        "quoteId": "b082ed6d-27ef-46e2-bc2f-aac55c3f79f6",
+        "txHash": "fbf2f72d0d6db5e70c12fba4d50a7299e1f1b259dad0d0e5fd15b140e978c48a",
+        "payerAddress": "GB6FKS72C67HNQ5A2ZRNK5GBNGXOR6PL5KTKCJRX7YAWF74WMZ4QHNJW",
         "amount": "1000000",
         "asset": "USDC",
         "route": "/v1/chat/completions",
@@ -94,29 +94,29 @@
       "issuer": [
         {
           "asset": "XLM",
-          "balance": "19999.9998700"
+          "balance": "19999.9997300"
         }
       ]
     }
   },
   "payout": {
-    "runAt": "2026-09-15T09:25:25.846Z",
+    "runAt": "2026-09-15T13:22:06.220Z",
     "steps": {
       "seed": {
         "providerId": "journey-payout-provider",
-        "routeId": "ede37c66-6653-4e0f-9211-76a9d4c755d3",
-        "revenueStroops": "4000000",
-        "alreadyReservedStroops": "3000000"
+        "routeId": "06a2b5ca-6d23-4456-8e07-12c343a9c401",
+        "revenueStroops": "2000000",
+        "alreadyReservedStroops": "1000000"
       },
       "auth": {
-        "challengeId": "2272f8a3-dc31-4da3-aa0c-a014771807c4",
+        "challengeId": "10dba986-d463-4c3e-a78c-1a00257e557f",
         "verified": true
       },
       "propose": {
         "response": {
-          "id": "c684d971-d1f5-4dee-8103-c8f1709b2b42",
+          "id": "f292c2ba-57ee-4027-a828-436162aa3a52",
           "providerId": "journey-payout-provider",
-          "proposalId": 6,
+          "proposalId": 8,
           "destination": "GCF7YNP4MIFGFZWPATVTWUQLJIHINNN4LFJDLHRVJ2Y7P4HWBSMVXZQN",
           "amount": "1000000",
           "status": "executed",
@@ -129,20 +129,20 @@
         "signer": [
           {
             "asset": "USDC:GBZEPCLP",
-            "balance": "63.4000000"
+            "balance": "81.6000000"
           },
           {
             "asset": "XLM",
-            "balance": "19996.2777461"
+            "balance": "19995.2092805"
           }
         ],
         "multisigSacBefore": {
-          "stroops": "67000000",
-          "usdc": "67.00"
+          "stroops": "85000000",
+          "usdc": "85.00"
         },
         "multisigSacAfter": {
-          "stroops": "66000000",
-          "usdc": "66.00"
+          "stroops": "84000000",
+          "usdc": "84.00"
         },
         "multisigContractId": "CBQQSVQAJXWKI7DDNXRY4WR4XGIVDSWJJU4IW2RP5GUAXSHAVPP3RMTL",
         "sacId": "CDFNZMPEDWPLMAD5SPLPSBJVZ5QW4L3LK3SIH2EUYAUJCU5JMBWQCKMJ"

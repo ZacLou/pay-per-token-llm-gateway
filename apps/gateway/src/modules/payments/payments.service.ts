@@ -1,6 +1,3 @@
-// Author: RawNuke
-// Copyright (c) 2026 RawNuke. All rights reserved.
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma } from '@x402/database';
 import { logger } from '@x402/logger';

@@ -1,6 +1,3 @@
-// Author: RawNuke
-// Copyright (c) 2026 RawNuke. All rights reserved.
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';

@@ -25,13 +25,23 @@
 | Metric                                                     | Value                                                       |
 | ---------------------------------------------------------- | ----------------------------------------------------------- |
 | Curated issues                                             | **18** (10 original Wave-8 + 8 hardening/feature batch)     |
-| Implemented in this repository (test-verified)             | **18**                                                      |
+| Implemented in this repository (test-verified)             | **17** — see the email-notification note below              |
 | Areas covered                                              | contracts, gateway, SDK, dashboard, notifications, database |
 | Declared `good first issue` count                          | **6** (as labeled on GitHub — not verifiable here)          |
 | Declared `security`-labeled count                          | **4** (as labeled on GitHub — not verifiable here)          |
 | Point value of the curated set (per the point model below) | **2,700**                                                   |
 
 **Point model:** High = 200 · Medium = 150 · Trivial = 100
+
+> **Correction (2026-09-15):** the email notification channel (#33 / Issue 9) is
+> **closed on GitHub but is not implemented in this repository.** It landed in
+> `09e4706` and was then deleted as dead code — the handler was never registered
+> in the dispatcher, its `EMAIL_*`/`SMTP_*` config did nothing and no recipient
+> model existed (`MAINNET_READINESS.md` §5). Auditing the tree, not the issue
+> tracker, is what surfaced this: there is no `nodemailer` dependency and no
+> `EmailNotificationHandler`. Durable in-app notifications (#43) and signed
+> webhooks do exist. The count above is corrected to 17 implemented; the point
+> total is left as the wave's bounty scale.
 
 ---
 
@@ -75,10 +85,10 @@
 
 ### 🔔 Notifications
 
-| #   | Issue                                    | GitHub                                                                   | Difficulty | Status    | Pts |
-| --- | ---------------------------------------- | ------------------------------------------------------------------------ | ---------- | --------- | --- |
-| 14  | Persist in-app notifications in Postgres | [#43](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/43) | Medium     | ✅ closed | 150 |
-| 9   | Email notification channel (nodemailer)  | [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) | Medium     | ✅ closed | 150 |
+| #   | Issue                                    | GitHub                                                                   | Difficulty | Status                                    | Pts |
+| --- | ---------------------------------------- | ------------------------------------------------------------------------ | ---------- | ----------------------------------------- | --- |
+| 14  | Persist in-app notifications in Postgres | [#43](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/43) | Medium     | ✅ closed                                 | 150 |
+| 9   | Email notification channel (nodemailer)  | [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) | Medium     | ⚠️ closed on GitHub, **not in this repo** | 150 |
 
 ---
 
@@ -114,21 +124,22 @@
 
 ## ✅ Implemented (closed) — proof of activity
 
-All 18 are closed; the table below records the tranche that closed first, and
-[`.github/WAVE8_ISSUES.md`](.github/WAVE8_ISSUES.md) carries the per-issue
-status for every one of them.
+All 18 are closed on GitHub; the table below records the tranche that closed
+first, and [`.github/WAVE8_ISSUES.md`](.github/WAVE8_ISSUES.md) carries the
+per-issue status for every one of them. One of them (#33, email) is closed
+without being present in this repository — see the correction above.
 
-| Issue                              | GitHub                                                                   | Commit / Date |
-| ---------------------------------- | ------------------------------------------------------------------------ | ------------- |
-| Wire credit-escrow settlement      | [#25](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/25) | 2026-09-09    |
-| SDK external signer                | [#26](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/26) | 2026-09-09    |
-| Clamp unbounded pagination limits  | [#27](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/27) | 2026-09-09    |
-| Multisig payout automation         | [#40](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/40) | 2026-09-09    |
-| DNS rebinding protection           | [#30](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/30) | `813fed7`     |
-| Dashboard unit tests (scaffolding) | [#32](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/32) | `05e10c9`     |
-| Email notification channel         | [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) | `09e4706`     |
-| Escrow accounting invariant tests  | [#34](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/34) | `b49a2d1`     |
-| SDK unit tests                     | [#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45) | 2026-09-09    |
+| Issue                              | GitHub                                                                   | Commit / Date                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Wire credit-escrow settlement      | [#25](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/25) | 2026-09-09                                                           |
+| SDK external signer                | [#26](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/26) | 2026-09-09                                                           |
+| Clamp unbounded pagination limits  | [#27](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/27) | 2026-09-09                                                           |
+| Multisig payout automation         | [#40](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/40) | 2026-09-09                                                           |
+| DNS rebinding protection           | [#30](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/30) | `813fed7`                                                            |
+| Dashboard unit tests (scaffolding) | [#32](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/32) | `05e10c9`                                                            |
+| Email notification channel         | [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) | `09e4706` — **later removed as dead code; see the correction above** |
+| Escrow accounting invariant tests  | [#34](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/34) | `b49a2d1`                                                            |
+| SDK unit tests                     | [#45](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/45) | 2026-09-09                                                           |
 
 ---
 
@@ -148,7 +159,7 @@ status for every one of them.
 
 - **Areas with full coverage:** Soroban contracts (5 issues), gateway (8 issues), SDK (2), dashboard (1), notifications (2).
 - **Bounty-ready:** every issue carries `bounty` for the Drips/Wave point ledger and is eligible for `Maybe Rewarded` GrantFox payouts on merge.
-- **Maturity signal:** all 18 curated issues are implemented and closed — the repo is actively maintained, not a parked codebase.
+- **Maturity signal:** 17 of the 18 curated issues are implemented in the tree; #33 (email) is closed on GitHub but was removed from the codebase, and the delivery matrix in `README.md` no longer claims an email channel. The repo is actively maintained, not a parked codebase.
 - **Onboarding funnel:** 6 `good first issue` tags (3 trivial + 3 medium) give newcomers a clear entry point while the remaining issues give experienced contributors meaningful scope.
 
 ---

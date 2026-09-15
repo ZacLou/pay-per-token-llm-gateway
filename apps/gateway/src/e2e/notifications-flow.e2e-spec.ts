@@ -200,7 +200,7 @@ jest.mock('@x402/database', () => ({
 const mockPrisma = jest.requireMock('@x402/database').prisma as any;
 
 jest.mock('@x402/notifications', () => ({
-  dispatcher: { dispatch: jest.fn().mockResolvedValue(['email']) },
+  dispatcher: { dispatch: jest.fn().mockResolvedValue(['in_app']) },
   WebhookNotificationHandler: jest.fn().mockImplementation(() => ({
     send: jest.fn().mockResolvedValue(true),
   })),

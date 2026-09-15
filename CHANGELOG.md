@@ -49,6 +49,60 @@ All notable changes to the x402 LLM Gateway project.
   account rather than trying to load a contract address as a Horizon account
   (which always returned `400` and silently made the payout assertions vacuous).
 
+- **The DAST job had never scanned anything.** The OWASP ZAP step handed every
+  file-writing option an absolute path, but ZAP requires that directory to be
+  mounted at `/zap/wrk`; without the mount it printed its own usage text and
+  exited `3` before scanning, which `continue-on-error: true` reported as
+  success — so the DAST gate's `FAIL-NEW 0 / WARN-NEW 0 / PASS 66` was never a
+  measurement. The reports directory is now mounted, the step fails loudly when
+  the scan does not run, and a new assertion requires both reports to exist
+  (ZAP exits `0` even when its own report job fails). A second defect surfaced
+  only once the gate actually ran: ZAP executes as uid `1000` inside the image
+  while the runner's uid differs, so the runner-owned `755` mount was not
+  writable and the scan died with `[Errno 13] Permission denied` — the mount is
+  now `0777`. Reproduced locally by running the image's `zap` user against a
+  `755` directory owned by another uid (`Permission denied`, writable after
+  `0777`), then verified end to end against the local gateway: both reports
+  written, `FAIL-NEW 0 / WARN-NEW 0 / PASS 66`.
+- **The SSRF guard no longer classifies non-public IPv6 as public.** `isPublicIp`
+  matched IPv6 by string prefix and returned `true` for everything it did not
+  recognise, so `::` — the unspecified address, which _connects to localhost_ on
+  Linux — plus `ff00::/8` multicast, IPv4-compatible `::a.b.c.d`, NAT64
+  `64:ff9b::/96`, 6to4 `2002::/16` (which carries an arbitrary IPv4 in groups
+  1–2) and Teredo `2001:0::/32` all passed as safe webhook/upstream targets. A
+  route or webhook hostname with an AAAA record of `::` therefore reached the
+  gateway's own loopback with no DNS rebinding required. Addresses are now
+  expanded to eight groups and admitted only as global unicast (`2000::/3`) with
+  no embedded private IPv4; nine regression cases pin it. The remaining
+  check-then-`fetch` rebinding window is documented, not claimed fixed — see
+  `SECURITY.md` "Known Residual Risks" #10.
+- **Running the Testnet journey no longer deletes the escrow leg's evidence.**
+  `testnet-journey.ts` wrote `docs/evidence/testnet-journey.json` with
+  `writeFileSync` while the escrow and payout legs _append_ their sections to the
+  same file, so re-running the journey dropped the whole `escrow` section that
+  `docs/VERIFICATION.md` §6 cites. It now merges (`{...existing, ...evidence}`)
+  like the other two writers; verified by re-running the journey and confirming
+  the 10:30 escrow section survived the 13:21 run.
+- **Removed two files' "All rights reserved" copyright headers.**
+  `payments.service.ts` and its spec carried `// Author: RawNuke` / `// Copyright
+(c) 2026 RawNuke. All rights reserved.` — the only two files in the tree with
+  such a notice, and incompatible with the MIT `LICENSE` they ship under.
+- **The email notification channel is no longer claimed anywhere.** It was
+  already deleted as dead code (no registered handler, inert `EMAIL_*`/`SMTP_*`
+  config, no recipient model), but the claim survived in the README delivery
+  matrix (`Webhook + email delivery` ✅), `.github/WAVE8_ISSUES.md` (Issue 9 with
+  every acceptance criterion ticked and a `✅ closed` status),
+  `GRANT_SUBMISSION.md` ("18 implemented") and `packages/types`
+  (`NotificationChannel` still listed `email`). All four are corrected, and the
+  three e2e mocks that returned a fabricated `['email']` channel now return a
+  channel that exists.
+- **A release tag no longer goes green having published nothing.**
+  `deploy.yml` warned and exited `0` when `DOCKER_USERNAME` was unset, so a
+  `v*` tag implied release images that did not exist. The job now fails with
+  the missing secrets in the job summary, using the same explicit
+  `ALLOW_DEPLOY_SKIP=true` repository-variable opt-out as the Vercel workflow —
+  the false-green deploy pattern documented in `docs/VERIFICATION.md` §7.
+
 ---
 
 ## [Unreleased] — 2026-09-13

@@ -201,6 +201,20 @@ mainnet go/no-go path or consciously deferred — see
    (111 pass); there is no on-chain state to migrate, so the next deployment
    simply uses the new path.
 
+10. **The SSRF guard validates a DNS answer, then `fetch` resolves again.**
+    Both the upstream-proxy and webhook paths resolve the hostname, check that
+    every answer is a public IP (`isPublicIp`), and then hand the _hostname_ to
+    `fetch` — which performs its own, separate resolution. A provider who
+    controls the hostname can answer public during the check and private during
+    the connect (classic DNS-rebinding TOCTOU); the 60 s check cache narrows the
+    window but does not close it. Closing it properly means pinning the socket
+    to the validated address (an undici `Agent` with a validating `lookup`, or
+    `https.request` with `lookup` + `servername`), which is a follow-up rather
+    than something this repository does today. The IPv6 classification gap that
+    made internal addresses reachable _without_ any rebinding — `::`, multicast,
+    Teredo, NAT64 and 6to4-with-embedded-private-IPv4 were all reported public —
+    **was** fixed on 2026-09-15 (see `docs/VERIFICATION.md` §8 #18).
+
 ## Security Checklist for Production
 
 - [ ] Use a dedicated Horizon/Soroban RPC provider with API keys

@@ -362,10 +362,21 @@ async function main() {
   );
 
   // Evidence output (run from repo root so relative paths are stable).
+  //
+  // Merge into whatever is already there instead of clobbering it. The escrow
+  // (`testnet-escrow.sh`) and payout (`testnet-journey.sh --payout`) legs append
+  // their own sections to this same file, so a plain `writeFileSync` here
+  // deletes the evidence another leg just produced. Reproduced 2026-09-15:
+  // running the journey after the escrow leg dropped the whole `escrow`
+  // section, leaving `docs/VERIFICATION.md` §6 pointing at evidence that was no
+  // longer in the file.
   const outPath = process.env.EVIDENCE_PATH || 'docs/evidence/testnet-journey.json';
   const fs = await import('fs');
   fs.mkdirSync('docs/evidence', { recursive: true });
-  fs.writeFileSync(outPath, JSON.stringify(evidence, null, 2));
+  const existing: Record<string, unknown> = fs.existsSync(outPath)
+    ? (JSON.parse(fs.readFileSync(outPath, 'utf-8')) as Record<string, unknown>)
+    : {};
+  fs.writeFileSync(outPath, JSON.stringify({ ...existing, ...evidence }, null, 2));
   console.log(`\n📄 Evidence written to ${outPath}`);
 
   console.log(

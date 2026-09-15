@@ -280,7 +280,7 @@ jest.mock('../modules/x402/escrow-client', () => ({
 
 // ── Mock webhook dispatcher ────────────────────
 
-const mockDispatch = jest.fn().mockResolvedValue(['email']);
+const mockDispatch = jest.fn().mockResolvedValue(['in_app']);
 
 jest.mock('@x402/notifications', () => ({
   dispatcher: {

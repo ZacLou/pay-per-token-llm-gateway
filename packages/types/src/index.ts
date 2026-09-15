@@ -364,7 +364,11 @@ export interface TimeSeriesDataPoint {
 
 // ── Notification Types ───────────────────────
 
-export type NotificationChannel = 'email' | 'webhook' | 'in_app';
+// No `email` member: the email (nodemailer) channel was removed rather than
+// left half-wired — nothing registered a handler for it, so no code path could
+// ever deliver it (MAINNET_READINESS.md §5). Keep this union in step with the
+// handlers that actually exist in @x402/notifications.
+export type NotificationChannel = 'webhook' | 'in_app';
 export type NotificationEvent =
   | 'payment_received'
   | 'payout_threshold_reached'

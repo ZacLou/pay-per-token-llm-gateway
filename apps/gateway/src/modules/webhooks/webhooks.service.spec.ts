@@ -150,11 +150,28 @@ describe('isPublicIp', () => {
 
   it('classifies public IPv6 addresses correctly', () => {
     expect(isPublicIp('2606:2800:220:1:248:1893:25c8:1946')).toBe(true);
+    // Compressed forms of a public address must classify the same.
+    expect(isPublicIp('2606:2800::1')).toBe(true);
     expect(isPublicIp('::1')).toBe(false);
     expect(isPublicIp('fe80::1')).toBe(false);
     expect(isPublicIp('fd12:3456::1')).toBe(false);
     expect(isPublicIp('::ffff:127.0.0.1')).toBe(false);
     expect(isPublicIp('::ffff:8.8.8.8')).toBe(true);
+  });
+
+  // Regression: these all used to be classified as PUBLIC. `::` connects to
+  // localhost on Linux, so an upstream/webhook hostname with an AAAA record of
+  // `::` was an SSRF route into the gateway's own loopback.
+  it('refuses non-global-unicast IPv6 that used to fail open', () => {
+    expect(isPublicIp('::')).toBe(false); // unspecified — connects to localhost
+    expect(isPublicIp('0:0:0:0:0:0:0:0')).toBe(false);
+    expect(isPublicIp('ff02::1')).toBe(false); // ff00::/8 multicast
+    expect(isPublicIp('64:ff9b::7f00:1')).toBe(false); // NAT64 to 127.0.0.1
+    expect(isPublicIp('::7f00:1')).toBe(false); // IPv4-compatible 127.0.0.1
+    expect(isPublicIp('2002:7f00:0001::')).toBe(false); // 6to4 embedding 127.0.0.1
+    expect(isPublicIp('2002:0a00:0001::')).toBe(false); // 6to4 embedding 10.0.0.1
+    expect(isPublicIp('2001:0000:4136:e378::1')).toBe(false); // Teredo
+    expect(isPublicIp('::ffff:7f00:1')).toBe(false); // hex IPv4-mapped loopback
   });
 
   it('returns false for non-IP input', () => {

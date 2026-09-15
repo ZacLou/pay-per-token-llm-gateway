@@ -821,6 +821,10 @@ jobs:
       - name: Run OWASP ZAP baseline scan
         run: |
           mkdir -p "$GITHUB_WORKSPACE/zap-reports"
+          # ZAP runs as uid 1000 inside the image (the `zap` user), which is not
+          # the runner's uid, so a 755 mount owned by the runner is not
+          # writable and ZAP dies with `[Errno 13] Permission denied`.
+          chmod 0777 "$GITHUB_WORKSPACE/zap-reports"
           docker run --rm --network host -t \
             -v "$GITHUB_WORKSPACE/zap-reports:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \

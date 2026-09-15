@@ -3,14 +3,18 @@
 > **18 well-scoped issues** spanning smart contracts (Rust/Soroban), gateway (NestJS), SDK (TypeScript), dashboard (Next.js), and security hardening.  
 > Each issue includes labels, complexity, acceptance criteria, and file-level pointers so contributors can start immediately.
 
-> ### ✅ All 18 issues are implemented and closed
+> ### ⚠️ 17 of 18 issues are implemented; Issue 9 (email) is not
 >
 > The issue bodies below are kept as the **historical problem statements** that
-> scoped this wave. Every one of them has since been implemented in the
-> repository, so the acceptance criteria are checked and the per-issue status
-> line reads `closed`. This file previously carried nine issues as `open` after
-> they had in fact shipped, which contradicted `GRANT_SUBMISSION.md`; the two
-> now agree.
+> scoped this wave. Seventeen of them have since been implemented in the
+> repository, so their acceptance criteria are checked and their status lines say
+> so. **Issue 9 (#33, email notifications) is the exception:** it landed in
+> `09e4706` and was then deliberately removed as dead code (it was never
+> registered in the dispatcher and its SMTP config was inert — see
+> `MAINNET_READINESS.md` §5). Its GitHub issue is closed while the feature is not
+> in this repository, so its criteria are unchecked and it is excluded from the
+> "implemented" count. This file previously described all 18 as complete, which
+> overstated the delivery and contradicted `MAINNET_READINESS.md`.
 >
 > Two caveats on what this document does **not** claim:
 >
@@ -368,7 +372,7 @@ The Next.js dashboard has **zero unit tests**. The `apps/dashboard/project.json`
 
 ## Issue 9: Wire Email Notification Channel
 
-**GitHub:** [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) · **Status:** ✅ closed — implemented in `09e4706` (dispatcher registration remains as follow-up in #43 scope)
+**GitHub:** [#33](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/33) · **Status:** ❌ **not in the current tree** — landed in `09e4706`, then deliberately **removed**. There is no email channel in this repository today: no `nodemailer` dependency, no `EmailNotificationHandler`, no `EMAIL_*`/`SMTP_*` config. The GitHub issue is closed; the feature is not shipped. Verified 2026-09-15 by auditing the source, not by reading this status line.
 
 **Title:** `feat: implement email notification channel with nodemailer`
 
@@ -397,13 +401,29 @@ The Next.js dashboard has **zero unit tests**. The `apps/dashboard/project.json`
 
 ### Acceptance Criteria
 
-- [x] When `EMAIL_ENABLED=true`, notification events with email targets are delivered via SMTP
-- [x] When `EMAIL_ENABLED=false`, email handler is not registered (no-op)
-- [x] SMTP connection failures are caught and logged; the gateway does not crash
-- [x] Email subject/body include relevant event details (event type, payment amount, timestamp)
-- [x] Unit tests mock nodemailer transport and verify `sendMail` is called with correct params
-- [x] `pnpm exec nx test notifications` passes
-- [x] `pnpm install` succeeds with nodemailer added
+> These were satisfied only by `09e4706`, which was reverted. They are **unchecked**
+> here because none of them holds for the code in this repository — marking them
+> `[x]` is what made this document claim a delivery path that does not exist.
+> The unit tests this issue asked for went with the handler; nothing asserts any
+> of the behaviour below.
+
+- [ ] When `EMAIL_ENABLED=true`, notification events with email targets are delivered via SMTP
+- [ ] When `EMAIL_ENABLED=false`, email handler is not registered (no-op)
+- [ ] SMTP connection failures are caught and logged; the gateway does not crash
+- [ ] Email subject/body include relevant event details (event type, payment amount, timestamp)
+- [ ] Unit tests mock nodemailer transport and verify `sendMail` is called with correct params
+- [x] `pnpm exec nx test notifications` passes (as it does for the remaining channels)
+- [ ] `pnpm install` succeeds with nodemailer added — there is no nodemailer dependency to install
+
+### Resolution instead of the email channel
+
+`MAINNET_READINESS.md` §5 records the decision: the handler was never registered,
+its SMTP config was inert and no recipient model existed, so the dead code and the
+`nodemailer` dependency were deleted rather than wired up. Durable in-app
+notifications were implemented instead (Issue 14 / #43) and signature-verified
+webhooks already existed. `packages/types` no longer advertises an `email`
+`NotificationChannel` either — a channel type nothing can deliver is the same
+false claim in a different file.
 
 ---
 
