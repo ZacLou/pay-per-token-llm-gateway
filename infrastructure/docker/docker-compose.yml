@@ -52,7 +52,11 @@ services:
       USDC_ISSUER: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
       # Fail fast: docker compose refuses to start without a real JWT_SECRET
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in .env (openssl rand -base64 32)}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,https://x402-dashboard.vercel.app}
+      # Both origins are allowed by default: the local dashboard container and
+      # the deployed Vercel dashboard (which calls this gateway from the
+      # browser, so its origin must be allow-listed or every request fails
+      # CORS).
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,https://pay-per-token-llm-gateway-dashboard.vercel.app}
       # Applied by the image entrypoint before the gateway starts, so a fresh
       # `docker compose up` never boots against an empty schema. Idempotent.
       RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}

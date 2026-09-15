@@ -21,7 +21,12 @@ data:
   HORIZON_URL: https://horizon-testnet.stellar.org
   SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
   USDC_ISSUER: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
-  CORS_ORIGINS: https://x402-dashboard.vercel.app
+  # The dashboard calls the gateway directly from the browser, so its origin
+  # must be allowed here or every request fails CORS. This previously pointed
+  # at `x402-dashboard.vercel.app`, which is not this project's deployment and
+  # currently serves Vercel's DEPLOYMENT_DISABLED page — so the shipped default
+  # allowed an origin that does not exist and blocked the one that does.
+  CORS_ORIGINS: https://pay-per-token-llm-gateway-dashboard.vercel.app
   TRUST_PROXY: '1'
   # Migrations are applied by a dedicated Job (migrations-job.yaml), not by the
   # gateway container — that keeps schema changes out of every replica's boot

@@ -69,6 +69,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: x402-config
+          env:
+            # `x402-config` sets PORT=3000 for the gateway. The dashboard image
+            # listens on 3001, and an explicit `env` entry overrides `envFrom`,
+            # so without this the server binds 3000 while the Service and every
+            # probe below target 3001 — the pod never becomes Ready.
+            - name: PORT
+              value: '3001'
           resources:
             requests:
               cpu: 100m

@@ -475,13 +475,17 @@ jobs:
       # Next.js inlines NEXT_PUBLIC_* into the client bundle at BUILD time. If
       # the Dockerfile's ARG/ENV wiring ever slips below the build step, the
       # image silently ships the fallback URL and the deployed dashboard points
-      # at the wrong gateway. Build the builder stage with a distinctive URL
-      # and assert it landed in the bundle.
-      - name: Build the dashboard builder stage with a probe URL
+      # at the wrong gateway. Build the image with a distinctive URL and assert
+      # it landed in the bundle.
+      #
+      # The FULL image is built deliberately (no `--target builder`). Stopping
+      # at the builder stage never executes the production stage, so its COPY
+      # paths and CMD went unverified — which is how the dashboard image came
+      # to be unbuildable while this job still reported on the bundle.
+      - name: Build the dashboard image with a probe URL
         run: |
           docker build \
             --file infrastructure/docker/Dockerfile.dashboard \
-            --target builder \
             --build-arg NEXT_PUBLIC_GATEWAY_URL=https://gw-arg-probe.invalid \
             --tag x402-dashboard-probe:ci \
             .
@@ -492,8 +496,9 @@ jobs:
           docker create --name probe x402-dashboard-probe:ci
           rm -rf /tmp/probe-static
           mkdir -p /tmp/probe-static
-          # Assert on the *client* assets only (/dist/apps/dashboard/.next/static
-          # is the tree the production stage serves). Next.js inlines only the
+          # Assert on the *client* assets only (/app/apps/dashboard/.next/static
+          # is the tree the production stage serves — see the COPY lines in
+          # infrastructure/docker/Dockerfile.dashboard). Next.js inlines only the
           # literal expression `process.env.NEXT_PUBLIC_*` into the browser
           # bundle. The server-side manifests (routes-manifest.json,
           # required-server-files.json, server.js) always contain the value
@@ -502,7 +507,7 @@ jobs:
           # client shipped the localhost fallback. That false pass is how the
           # deployed dashboard ended up calling localhost:3000 while CI stayed
           # green.
-          docker cp probe:/app/dist/apps/dashboard/.next/static /tmp/probe-static
+          docker cp probe:/app/apps/dashboard/.next/static /tmp/probe-static
           docker rm -f probe
           if grep -rq "gw-arg-probe.invalid" /tmp/probe-static; then
             echo "OK: NEXT_PUBLIC_GATEWAY_URL was inlined into the client bundle"
@@ -767,6 +772,16 @@ jobs:
       # Build the tsc output + esbuild bundle (the same artifact the Docker
       # image runs), then boot it against the service containers.
       - run: pnpm exec nx build gateway
+
+      # The gateway's boot-time schema guard refuses to start against a database
+      # with no migration history (see apps/gateway/src/common/schema-guard.ts).
+      # Without this the process exits before binding — correctly — and the
+      # readiness curl below fails with an opaque `exit code 7`.
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgresql://x402:x402_dev_password@127.0.0.1:5432/x402_gateway
+        run: pnpm exec nx run database:migrate:deploy
+
       - name: Start gateway (bundle) against dockerized Postgres/Redis
         env:
           NODE_ENV: development
@@ -782,7 +797,13 @@ jobs:
             curl -sf http://127.0.0.1:3000/health/live > /dev/null && break
             sleep 2
           done
-          curl -sf http://127.0.0.1:3000/health/ready
+          # Surface the gateway's own output on failure; otherwise a boot crash
+          # is reported as a bare curl exit code with no cause.
+          if ! curl -sf http://127.0.0.1:3000/health/ready; then
+            echo "::error::gateway never became ready — gateway log follows"
+            cat /tmp/gateway.log
+            exit 1
+          fi
 
       # OWASP ZAP baseline: passive + active-lite scan of the booted gateway.
       # Report-only for now (findings land in the DAST step summary) — the
