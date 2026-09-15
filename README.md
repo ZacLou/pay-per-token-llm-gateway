@@ -105,9 +105,12 @@ Start there before citing anything in this file.
 
 Machine-readable receipts live in [`docs/evidence/`](./docs/evidence):
 `testnet-journey.json` (a real USDC payment, its replay and forged-payment
-rejections) and `dashboard-e2e.json` (every dashboard data source returning real
-rows). Reproduce them with `bash scripts/testnet-journey.sh` and
-`bash scripts/dashboard-e2e.sh`.
+rejections, the multisig payout, and the credit-escrow charge/refund),
+`dashboard-e2e.json` (every dashboard data source returning real rows) and
+`failure-injection.json` (what every surface returns with PostgreSQL, Redis or
+Soroban RPC down). Reproduce them with `bash scripts/testnet-journey.sh`,
+`bash scripts/testnet-escrow.sh`, `bash scripts/dashboard-e2e.sh` and
+`bash scripts/failure-injection.sh`.
 
 ---
 

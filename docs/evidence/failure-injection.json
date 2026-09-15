@@ -1,0 +1,535 @@
+{
+  "runAt": "2026-09-15T10:37:09.816Z",
+  "phases": {
+    "baseline": {
+      "liveness": {
+        "status": 200,
+        "ms": 11,
+        "body": {
+          "status": "ok",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:37:10.095Z",
+          "uptime": 3.415458998,
+          "environment": "development",
+          "network": "testnet"
+        }
+      },
+      "readiness": {
+        "status": 200,
+        "ms": 9,
+        "body": {
+          "status": "ready",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:37:10.106Z",
+          "uptime": 3.426095135,
+          "environment": "development",
+          "network": "testnet",
+          "checks": {
+            "database": {
+              "status": "ok",
+              "latencyMs": 2
+            },
+            "redis": {
+              "status": "ok",
+              "latencyMs": 1
+            }
+          }
+        }
+      },
+      "unpaidRequest": {
+        "status": 402,
+        "ms": 41,
+        "message": "Payment Required",
+        "body": {
+          "status": 402,
+          "message": "Payment Required",
+          "quote": {
+            "id": "5c3a851c-ec17-4263-b643-1cda7d022966",
+            "route": "/v1/chat/completions",
+            "pricingModel": "flat",
+            "amount": "1000000",
+            "asset": "USDC",
+            "assetIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "paymentAddress": "GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ",
+            "memo": "5c3a851cec174263b6431cda",
+            "network": "testnet",
+            "issuedAt": 1789468630,
+            "expiresAt": 1789468930,
+            "statusUrl": "http://127.0.0.1:3210/api/v1/payments/5c3a851c-ec17-4263-b643-1cda7d022966/status"
+          },
+          "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ\n   Memo: 5c3a851cec174263b6431cda\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3210/api/v1/payments/5c3a851c-ec17-4263-b643-1cda7d022966/status\n\nThis quote expires at: 2026-09-15T10:42:10.000Z",
+          "docs": "http://127.0.0.1:3210/api/docs"
+        }
+      },
+      "forgedHash": {
+        "status": 402,
+        "ms": 630,
+        "message": "Payment verification failed: Transaction not found on chain",
+        "body": {
+          "status": 402,
+          "error": "Payment Required",
+          "message": "Payment verification failed: Transaction not found on chain"
+        }
+      },
+      "escrowDraw": {
+        "status": 402,
+        "ms": 14,
+        "message": "Escrow payment failed: Escrow settlement is not enabled. Payment Required",
+        "body": {
+          "status": 402,
+          "message": "Escrow payment failed: Escrow settlement is not enabled. Payment Required",
+          "quote": {
+            "id": "1e83a8bd-1ba7-45fa-8596-8186b50f3107",
+            "route": "/v1/chat/completions",
+            "pricingModel": "flat",
+            "amount": "1000000",
+            "asset": "USDC",
+            "assetIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "paymentAddress": "GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ",
+            "memo": "1e83a8bd1ba745fa85968186",
+            "network": "testnet",
+            "issuedAt": 1789468630,
+            "expiresAt": 1789468930,
+            "statusUrl": "http://127.0.0.1:3210/api/v1/payments/1e83a8bd-1ba7-45fa-8596-8186b50f3107/status"
+          },
+          "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ\n   Memo: 1e83a8bd1ba745fa85968186\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3210/api/v1/payments/1e83a8bd-1ba7-45fa-8596-8186b50f3107/status\n\nThis quote expires at: 2026-09-15T10:42:10.000Z",
+          "docs": "http://127.0.0.1:3210/api/docs"
+        }
+      },
+      "authenticatedRoutes": {
+        "status": 200,
+        "ms": 8,
+        "body": [
+          {
+            "id": "810a083c-3ab9-4225-a645-3535317a9c3f",
+            "providerId": "failinject-provider",
+            "path": "/v1/chat/completions",
+            "upstreamUrl": "https://jsonplaceholder.typicode.com/posts",
+            "model": "failinject-model",
+            "pricingModel": "flat",
+            "flatPrice": "1000000",
+            "acceptedAssets": ["USDC"],
+            "rateLimit": 1000,
+            "active": true,
+            "createdAt": "2026-09-15T10:37:09.905Z",
+            "updatedAt": "2026-09-15T10:37:09.905Z"
+          }
+        ]
+      },
+      "readinessChecks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 2
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 1
+        }
+      }
+    },
+    "postgres-down": {
+      "liveness": {
+        "status": 200,
+        "ms": 6,
+        "body": {
+          "status": "ok",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:37:11.565Z",
+          "uptime": 4.885101755,
+          "environment": "development",
+          "network": "testnet"
+        }
+      },
+      "readiness": {
+        "status": 503,
+        "ms": 10,
+        "body": {
+          "status": "not_ready",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:37:11.575Z",
+          "uptime": 4.894646048,
+          "environment": "development",
+          "network": "testnet",
+          "checks": {
+            "database": {
+              "status": "down",
+              "latencyMs": 4,
+              "error": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nServer has closed the connection."
+            },
+            "redis": {
+              "status": "ok",
+              "latencyMs": 0
+            }
+          }
+        }
+      },
+      "unpaidRequest": {
+        "status": 502,
+        "ms": 57,
+        "message": "Upstream LLM request failed",
+        "body": {
+          "status": 502,
+          "error": "Bad Gateway",
+          "message": "Upstream LLM request failed"
+        }
+      },
+      "forgedHash": {
+        "status": 502,
+        "ms": 214,
+        "message": "Upstream LLM request failed",
+        "body": {
+          "status": 502,
+          "error": "Bad Gateway",
+          "message": "Upstream LLM request failed"
+        }
+      },
+      "escrowDraw": {
+        "status": 502,
+        "ms": 59,
+        "message": "Upstream LLM request failed",
+        "body": {
+          "status": 502,
+          "error": "Bad Gateway",
+          "message": "Upstream LLM request failed"
+        }
+      },
+      "authenticatedRoutes": {
+        "status": 500,
+        "ms": 53,
+        "message": "\nInvalid `database_12.prisma.route.findMany()` invocation in\n/workspaces/pay-per-token-llm-gateway/dist/apps/gateway/main.js:146291:55\n\n  146288  * caller — this prevents cross-tenant reads.\n  146289 ",
+        "body": {
+          "status": 500,
+          "error": "Internal Server Error",
+          "message": "\nInvalid `database_12.prisma.route.findMany()` invocation in\n/workspaces/pay-per-token-llm-gateway/dist/apps/gateway/main.js:146291:55\n\n  146288  * caller — this prevents cross-tenant reads.\n  146289  */\n  146290 async findAll(ownerAddress, providerId) {\n→ 146291   const routes = await database_12.prisma.route.findMany(\nCan't reach database server at `127.0.0.1:55434`\n\nPlease make sure your database server is running at `127.0.0.1:55434`.",
+          "timestamp": "2026-09-15T10:37:11.958Z"
+        }
+      },
+      "readinessChecks": {
+        "database": {
+          "status": "down",
+          "latencyMs": 4,
+          "error": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nServer has closed the connection."
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 0
+        }
+      }
+    },
+    "redis-down": {
+      "liveness": {
+        "status": 200,
+        "ms": 3,
+        "body": {
+          "status": "ok",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:37:14.557Z",
+          "uptime": 7.877506427,
+          "environment": "development",
+          "network": "testnet"
+        }
+      },
+      "readiness": {
+        "status": 503,
+        "ms": 446,
+        "body": {
+          "status": "not_ready",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:37:15.003Z",
+          "uptime": 8.322703861,
+          "environment": "development",
+          "network": "testnet",
+          "checks": {
+            "database": {
+              "status": "ok",
+              "latencyMs": 1
+            },
+            "redis": {
+              "status": "down",
+              "latencyMs": 440,
+              "error": "Reached the max retries per request limit (which is 3). Refer to \"maxRetriesPerRequest\" option for details."
+            }
+          }
+        }
+      },
+      "unpaidRequest": {
+        "status": 402,
+        "ms": 2233,
+        "message": "Payment Required",
+        "body": {
+          "status": 402,
+          "message": "Payment Required",
+          "quote": {
+            "id": "e6ab70d0-5e89-43dd-ac71-259381349ada",
+            "route": "/v1/chat/completions",
+            "pricingModel": "flat",
+            "amount": "1000000",
+            "asset": "USDC",
+            "assetIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "paymentAddress": "GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ",
+            "memo": "e6ab70d05e8943ddac712593",
+            "network": "testnet",
+            "issuedAt": 1789468637,
+            "expiresAt": 1789468937,
+            "statusUrl": "http://127.0.0.1:3210/api/v1/payments/e6ab70d0-5e89-43dd-ac71-259381349ada/status"
+          },
+          "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ\n   Memo: e6ab70d05e8943ddac712593\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3210/api/v1/payments/e6ab70d0-5e89-43dd-ac71-259381349ada/status\n\nThis quote expires at: 2026-09-15T10:42:17.000Z",
+          "docs": "http://127.0.0.1:3210/api/docs"
+        }
+      },
+      "forgedHash": {
+        "status": 502,
+        "ms": 9177,
+        "message": "Upstream LLM request failed",
+        "body": {
+          "status": 502,
+          "error": "Bad Gateway",
+          "message": "Upstream LLM request failed"
+        }
+      },
+      "escrowDraw": {
+        "status": 402,
+        "ms": 7013,
+        "message": "Escrow payment failed: Escrow settlement is not enabled. Payment Required",
+        "body": {
+          "status": 402,
+          "message": "Escrow payment failed: Escrow settlement is not enabled. Payment Required",
+          "quote": {
+            "id": "2cd236d8-df9d-4c16-911a-a60a39603c3c",
+            "route": "/v1/chat/completions",
+            "pricingModel": "flat",
+            "amount": "1000000",
+            "asset": "USDC",
+            "assetIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "paymentAddress": "GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ",
+            "memo": "2cd236d8df9d4c16911aa60a",
+            "network": "testnet",
+            "issuedAt": 1789468653,
+            "expiresAt": 1789468953,
+            "statusUrl": "http://127.0.0.1:3210/api/v1/payments/2cd236d8-df9d-4c16-911a-a60a39603c3c/status"
+          },
+          "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ\n   Memo: 2cd236d8df9d4c16911aa60a\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3210/api/v1/payments/2cd236d8-df9d-4c16-911a-a60a39603c3c/status\n\nThis quote expires at: 2026-09-15T10:42:33.000Z",
+          "docs": "http://127.0.0.1:3210/api/docs"
+        }
+      },
+      "authenticatedRoutes": {
+        "status": 401,
+        "ms": 8593,
+        "message": "Invalid token",
+        "body": {
+          "message": "Invalid token",
+          "error": "Unauthorized",
+          "statusCode": 401,
+          "timestamp": "2026-09-15T10:37:42.018Z"
+        }
+      },
+      "readinessChecks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 1
+        },
+        "redis": {
+          "status": "down",
+          "latencyMs": 440,
+          "error": "Reached the max retries per request limit (which is 3). Refer to \"maxRetriesPerRequest\" option for details."
+        }
+      },
+      "authWithoutRedis": "refused"
+    },
+    "soroban-rpc-down": {
+      "liveness": {
+        "status": 200,
+        "ms": 19,
+        "body": {
+          "status": "ok",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:38:06.946Z",
+          "uptime": 59.21674586,
+          "environment": "development",
+          "network": "testnet"
+        }
+      },
+      "readiness": {
+        "status": 200,
+        "ms": 21,
+        "body": {
+          "status": "ready",
+          "service": "x402-gateway",
+          "version": "0.1.0",
+          "timestamp": "2026-09-15T10:38:06.968Z",
+          "uptime": 59.238731646,
+          "environment": "development",
+          "network": "testnet",
+          "checks": {
+            "database": {
+              "status": "ok",
+              "latencyMs": 13
+            },
+            "redis": {
+              "status": "ok",
+              "latencyMs": 1
+            }
+          }
+        }
+      },
+      "unpaidRequest": {
+        "status": 402,
+        "ms": 40,
+        "message": "Payment Required",
+        "body": {
+          "status": 402,
+          "message": "Payment Required",
+          "quote": {
+            "id": "e483b131-e590-4512-b5f2-ef59f442b8cc",
+            "route": "/v1/chat/completions",
+            "pricingModel": "flat",
+            "amount": "1000000",
+            "asset": "USDC",
+            "assetIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "paymentAddress": "GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ",
+            "memo": "e483b131e5904512b5f2ef59",
+            "network": "testnet",
+            "issuedAt": 1789468686,
+            "expiresAt": 1789468986,
+            "statusUrl": "http://127.0.0.1:3210/api/v1/payments/e483b131-e590-4512-b5f2-ef59f442b8cc/status"
+          },
+          "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ\n   Memo: e483b131e5904512b5f2ef59\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3210/api/v1/payments/e483b131-e590-4512-b5f2-ef59f442b8cc/status\n\nThis quote expires at: 2026-09-15T10:43:06.000Z",
+          "docs": "http://127.0.0.1:3210/api/docs"
+        }
+      },
+      "forgedHash": {
+        "status": 402,
+        "ms": 480,
+        "message": "Payment verification failed: Payment already used (replay protection)",
+        "body": {
+          "status": 402,
+          "error": "Payment Required",
+          "message": "Payment verification failed: Payment already used (replay protection)"
+        }
+      },
+      "escrowDraw": {
+        "status": 402,
+        "ms": 24,
+        "message": "Escrow payment failed: Could not read escrow balance. Payment Required",
+        "body": {
+          "status": 402,
+          "message": "Escrow payment failed: Could not read escrow balance. Payment Required",
+          "quote": {
+            "id": "b290c2ba-176d-4ad5-b906-c1e92c9b3916",
+            "route": "/v1/chat/completions",
+            "pricingModel": "flat",
+            "amount": "1000000",
+            "asset": "USDC",
+            "assetIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "paymentAddress": "GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ",
+            "memo": "b290c2ba176d4ad5b906c1e9",
+            "network": "testnet",
+            "issuedAt": 1789468687,
+            "expiresAt": 1789468987,
+            "statusUrl": "http://127.0.0.1:3210/api/v1/payments/b290c2ba-176d-4ad5-b906-c1e92c9b3916/status"
+          },
+          "instructions": "Payment of 1000000 USDC is required to access /v1/chat/completions.\n\nTo pay:\n1. Send 1000000 USDC to GAEQFGTVUOJM77VGMKXDNGLHVACEONPL5SWEOZFHN2TOWCSGLWOY53IJ\n   Memo: b290c2ba176d4ad5b906c1e9\n2. Note the transaction hash\n3. Retry your request with the header: X-Payment-Hash: <tx_hash>\n4. Or check payment status at: http://127.0.0.1:3210/api/v1/payments/b290c2ba-176d-4ad5-b906-c1e92c9b3916/status\n\nThis quote expires at: 2026-09-15T10:43:07.000Z",
+          "docs": "http://127.0.0.1:3210/api/docs"
+        }
+      },
+      "authenticatedRoutes": {
+        "note": "no token available"
+      },
+      "readinessChecks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 13
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 1
+        }
+      }
+    }
+  },
+  "authTokenObtained": true,
+  "violations": 0,
+  "summary": {
+    "baseline": {
+      "liveness": 200,
+      "readiness": 200,
+      "readinessChecks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 2
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 1
+        }
+      },
+      "unpaid": 402,
+      "forgedHash": 402,
+      "escrowDraw": 402,
+      "routes": 200
+    },
+    "postgres-down": {
+      "liveness": 200,
+      "readiness": 503,
+      "readinessChecks": {
+        "database": {
+          "status": "down",
+          "latencyMs": 4,
+          "error": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nServer has closed the connection."
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 0
+        }
+      },
+      "unpaid": 502,
+      "forgedHash": 502,
+      "escrowDraw": 502,
+      "routes": 500
+    },
+    "redis-down": {
+      "liveness": 200,
+      "readiness": 503,
+      "readinessChecks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 1
+        },
+        "redis": {
+          "status": "down",
+          "latencyMs": 440,
+          "error": "Reached the max retries per request limit (which is 3). Refer to \"maxRetriesPerRequest\" option for details."
+        }
+      },
+      "unpaid": 402,
+      "forgedHash": 502,
+      "escrowDraw": 402,
+      "routes": 401
+    },
+    "soroban-rpc-down": {
+      "liveness": 200,
+      "readiness": 200,
+      "readinessChecks": {
+        "database": {
+          "status": "ok",
+          "latencyMs": 13
+        },
+        "redis": {
+          "status": "ok",
+          "latencyMs": 1
+        }
+      },
+      "unpaid": 402,
+      "forgedHash": 402,
+      "escrowDraw": 402,
+      "routes": null
+    }
+  }
+}
