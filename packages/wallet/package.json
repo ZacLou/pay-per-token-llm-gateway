@@ -9,6 +9,6 @@
     "@x402/types": "workspace:*",
     "@x402/config": "workspace:*",
     "@x402/logger": "workspace:*",
-    "@stellar/stellar-sdk": "^12.0.0"
+    "@stellar/stellar-sdk": "^16.3.0"
   }
 }

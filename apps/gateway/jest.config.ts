@@ -8,6 +8,10 @@ const config: Config = {
     '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
+  // stellar-sdk 16 depends on @noble/hashes 2.x, which is ESM-only. Node 22+
+  // can `require()` it, but Jest's CJS runtime cannot, so those files must go
+  // through the transformer instead of being ignored as node_modules.
+  transformIgnorePatterns: ['node_modules/(?!(.*@noble|.*uint8array-extras)/)'],
   // Pin NODE_ENV=test + a throwaway JWT_SECRET (see file) so the H3
   // config fail-fast hardening doesn't block test runs.
   setupFiles: ['<rootDir>/jest.setup.ts'],

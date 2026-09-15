@@ -4,6 +4,53 @@ All notable changes to the x402 LLM Gateway project.
 
 ---
 
+## [Unreleased] — 2026-09-15
+
+### Fixed
+
+- **On-chain settlement works for the first time: `@stellar/stellar-sdk`
+  `12.3.0` → `16.3.0` (LTS).** The pinned client predated protocol 23, which
+  Testnet now runs, so it could not decode a submitted transaction's meta:
+  every Soroban write failed with `Bad union switch: 4` while the failure was
+  swallowed by best-effort `try/catch` blocks that log and continue. Two
+  earlier defects had to be fixed in sequence before this one became visible —
+  the signing-API misuse and the null source account — which is why "the
+  payout leg fails" was never a single bug. See `docs/VERIFICATION.md` §8
+  #10–#11.
+
+  `signAuthEntries` takes `address` rather than `publicKey` in SDK 16, the
+  signer callbacks resolve to `{ signedTxXdr }` / `{ signedAuthEntry }`, and
+  the SDK's `@noble/hashes` 2.x dependency is ESM-only — Node can `require()`
+  it but Jest cannot, so the affected Jest projects now transform those
+  modules and enable `allowJs` for their spec tsconfigs.
+
+  **Verified end to end on Testnet**: the multisig payout leg now deploys,
+  funds, proposes, approves, executes the USDC transfer on-chain and is
+  recorded as `executed` with its settlement hash. Evidence in
+  `docs/VERIFICATION.md` §6.
+
+- **Payout execution is read back from the contract instead of inferred from a
+  return value.** `multisig.approve(..)` is declared `-> ()`, but the client did
+  `executed = Boolean(tx.result)`, so a threshold-1 payout that had already
+  moved funds was recorded as merely `approved` with no `executedAt`. The unit
+  test encoded the same wrong assumption (a mocked boolean result) and passed
+  regardless; it now covers the real contract shape and fails closed if the
+  execution state cannot be confirmed.
+
+- **`PayoutProposal.txHash` is now populated.** Both the admin and cron payout
+  paths persist the submitted transaction hash — the settling transaction when
+  the payout executes — so a payout can be traced from the database to Horizon.
+
+- **The live payout harness is re-runnable.** A fixed seed `Payment.txHash`
+  tripped a unique constraint on the second run, previous proposals reserved the
+  seeded revenue so a repeat run found nothing payable, and `BigInt` SAC
+  balances broke evidence serialization. The seed is now upserted and sized to
+  leave exactly 1 USDC payable, and the balance reader simulates from a real
+  account rather than trying to load a contract address as a Horizon account
+  (which always returned `400` and silently made the payout assertions vacuous).
+
+---
+
 ## [Unreleased] — 2026-09-13
 
 ### Security

@@ -39,10 +39,14 @@ export function amountToScVal(amount: string): xdr.ScVal {
   return xdr.ScVal.scvI128(new xdr.Int128Parts({ lo, hi }));
 }
 
-/** Signs a raw transaction envelope XDR, returning the signed XDR. */
-type SignTransaction = (txXdr: string) => Promise<string>;
-/** Signs a single auth-entry XDR, returning the signed entry. */
-type SignAuthEntry = (entryXdr: string) => Promise<string>;
+/**
+ * Signs a raw transaction envelope XDR. Since stellar-sdk 16 the callback
+ * resolves to `{ signedTxXdr, signerAddress? }` rather than a bare XDR string
+ * (the SEP-43 wallet shape), so the return type must carry that envelope.
+ */
+type SignTransaction = (txXdr: string) => Promise<{ signedTxXdr: string }>;
+/** Signs a single auth-entry XDR, returning `{ signedAuthEntry }` (SDK 16+). */
+type SignAuthEntry = (entryXdr: string) => Promise<{ signedAuthEntry: string }>;
 
 /**
  * The subset of the SDK's `AssembledTransaction` this helper drives. Declared
@@ -52,9 +56,10 @@ type SignAuthEntry = (entryXdr: string) => Promise<string>;
 export interface SignableContractTx {
   sign(opts: { signTransaction?: SignTransaction }): Promise<void | unknown>;
   send(): Promise<unknown>;
+  // stellar-sdk 16 renamed the account option from `publicKey` to `address`.
   signAuthEntries?(opts: {
     signAuthEntry?: SignAuthEntry;
-    publicKey?: string;
+    address?: string;
   }): Promise<void | unknown>;
   needsNonInvokerSigningBy?(): string[];
 }
@@ -81,12 +86,16 @@ export interface SignableContractTx {
  * `needsNonInvokerSigningBy()` is consulted first because `signAuthEntries`
  * throws `NoSignatureNeeded` when the invocation carries no auth entries; a
  * call that needs no `require_auth` is still signed and sent.
+ *
+ * @returns the submitted transaction hash, when the SDK exposes one. Callers
+ *   record it as settlement evidence; it is `undefined` only for a transaction
+ *   that never reached the network.
  */
 export async function signAndSendContractTx(
   tx: SignableContractTx,
   keypair: Keypair,
   networkPassphrase: string,
-): Promise<void> {
+): Promise<string | undefined> {
   const { contract } = await import('@stellar/stellar-sdk');
   const signer = contract.basicNodeSigner(keypair, networkPassphrase);
 
@@ -96,10 +105,15 @@ export async function signAndSendContractTx(
   if (needsAuthEntries && typeof tx.signAuthEntries === 'function') {
     await tx.signAuthEntries({
       signAuthEntry: signer.signAuthEntry,
-      publicKey: keypair.publicKey(),
+      address: keypair.publicKey(),
     });
   }
 
   await tx.sign({ signTransaction: signer.signTransaction });
-  await tx.send();
+
+  // `send()` resolves to the SDK's `SentTransaction`, which keeps the
+  // submission response. Its shape moved between major versions, so read both
+  // the nested and the flat hash rather than pinning one.
+  const sent = (await tx.send()) as { sendTransactionResponse?: { hash?: string }; hash?: string };
+  return sent?.sendTransactionResponse?.hash ?? sent?.hash;
 }

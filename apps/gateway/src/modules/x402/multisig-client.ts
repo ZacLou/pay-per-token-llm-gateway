@@ -68,6 +68,8 @@ export interface MultisigResult {
   proposalId?: number;
   /** Set by `approve` — whether the proposal reached quorum and executed. */
   executed?: boolean;
+  /** Hash of the transaction this call submitted, when one was submitted. */
+  txHash?: string;
 }
 
 // ── Core operations ──────────────────────────
@@ -93,6 +95,12 @@ export async function proposeMultisig(options: MultisigProposeOptions): Promise<
       contractId,
       rpcUrl,
       networkPassphrase,
+      // The SDK builds the invocation against this account and reads its
+      // sequence number from it. Omitting it makes `getAccount` fall back to
+      // `Account(NULL_ACCOUNT, '0')`, so the transaction goes out from an
+      // all-zero source with sequence 1 and the network rejects it — this is
+      // what produced `txBadSeq` on the payout leg.
+      publicKey: adminKeypair.publicKey(),
       ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
     });
 
@@ -102,7 +110,7 @@ export async function proposeMultisig(options: MultisigProposeOptions): Promise<
       amount: amountToScVal(amount),
     });
 
-    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
+    const txHash = await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     // The proposal id is the parsed return value of the invocation.
     const proposalId = Number(tx.result ?? 0);
@@ -112,8 +120,9 @@ export async function proposeMultisig(options: MultisigProposeOptions): Promise<
       destination: destination.slice(0, 8),
       amount,
       proposalId,
+      txHash,
     });
-    return { success: true, proposalId };
+    return { success: true, proposalId, txHash };
   } catch (err) {
     const message = (err as Error).message;
     logger.warn(
@@ -153,6 +162,9 @@ export async function approveMultisig(options: MultisigApproveOptions): Promise<
       contractId,
       rpcUrl,
       networkPassphrase,
+      // See proposeMultisig: the source account must be the signer, or the
+      // invocation is built against the null account and rejected.
+      publicKey: signerKeypair.publicKey(),
       ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
     });
 
@@ -164,17 +176,33 @@ export async function approveMultisig(options: MultisigApproveOptions): Promise<
 
     // The auth entry for `signer.require_auth()` is created by the SDK during
     // simulation; signing it with the signer's key proves authorization.
-    await signAndSendContractTx(tx, signerKeypair, networkPassphrase);
+    const txHash = await signAndSendContractTx(tx, signerKeypair, networkPassphrase);
 
-    const executed = Boolean(tx.result);
+    // `approve` is declared `-> ()` in the contract, so `tx.result` is void and
+    // can never signal execution. Inferring it from the return value reported a
+    // threshold-1 payout — where the contract had already transferred the
+    // funds — as merely "approved", and left `executedAt` unset forever. Read
+    // the proposal back and observe what the contract actually did.
+    let executed = false;
+    try {
+      const { result } = await client.get_proposal({ proposal_id: xdr.ScVal.scvU32(proposalId) });
+      executed = Boolean(result?.executed);
+    } catch (readErr) {
+      // Fail closed: an unconfirmed approval must not be recorded as executed.
+      logger.warn(
+        `[multisig] Could not confirm the execution state of proposal ${proposalId} — ` +
+          `Error: ${(readErr as Error).message}`,
+      );
+    }
 
     logger.info('[multisig] Payout approval submitted', {
       contractId: contractId.slice(0, 8),
       proposalId,
       signer: signer.slice(0, 8),
       executed,
+      txHash,
     });
-    return { success: true, executed };
+    return { success: true, executed, txHash };
   } catch (err) {
     const message = (err as Error).message;
     logger.warn(`[multisig] approveMultisig failed for proposal ${proposalId} — Error: ${message}`);

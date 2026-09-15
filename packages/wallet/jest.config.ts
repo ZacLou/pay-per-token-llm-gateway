@@ -8,6 +8,10 @@ const config: Config = {
     '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
+  // stellar-sdk 16 depends on ESM-only packages (@noble/hashes 2.x,
+  // uint8array-extras). Node can `require()` them; Jest cannot, so they must
+  // pass through the transformer rather than being skipped as node_modules.
+  transformIgnorePatterns: ['node_modules/(?!(.*@noble|.*uint8array-extras)/)'],
   coverageDirectory: '../../coverage/packages/wallet',
   // coverageReporters is configured via the nx executor options (global config).
   // Thresholds calibrated slightly below current coverage (97% stmts / 100%

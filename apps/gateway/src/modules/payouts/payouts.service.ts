@@ -268,6 +268,11 @@ export class PayoutsService {
           data: {
             status: 'proposed',
             proposalId: result.proposalId ?? null,
+            // On-chain reference for the proposal call. When the payout later
+            // executes, this is replaced by the approving (settling)
+            // transaction — `txHash` always names this proposal's most recent
+            // on-chain transaction.
+            ...(result.txHash ? { txHash: result.txHash } : {}),
           },
         });
 
@@ -293,6 +298,9 @@ export class PayoutsService {
                 status: 'executed',
                 approvals: signerAddress ? [signerAddress] : [],
                 executedAt: new Date(),
+                // The settlement transaction: this is the call that moved the
+                // funds, and the receipt a provider would be shown.
+                ...(approveResult.txHash ? { txHash: approveResult.txHash } : {}),
               },
             });
             this.logger.log(`Payout auto-approved and executed for ${providerName}.`, {

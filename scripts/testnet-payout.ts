@@ -34,7 +34,7 @@ import {
   rpc,
 } from '@stellar/stellar-sdk';
 import { execFileSync } from 'node:child_process';
-import { prisma } from '@x402/database';
+import { PAYOUT_RESERVING_STATUSES, prisma } from '@x402/database';
 
 // ── Config ────────────────────────────────────
 
@@ -265,7 +265,11 @@ async function sacBalance(
   address: string,
 ): Promise<{ stroops: bigint; usdc: string } | null> {
   try {
-    const account = await server.loadAccount(sacId);
+    // The source account must be a real ACCOUNT. `sacId` is a contract (C...),
+    // which Horizon cannot load — `/accounts/C…` is a 400, which is why every
+    // SAC balance read used to come back null. Simulation needs no signature,
+    // so any funded account works; the signer is always funded at this point.
+    const account = await server.loadAccount(signer.publicKey());
     const builder = new TransactionBuilder(account, {
       fee: BASE_FEE,
       networkPassphrase: NETWORK_PASSPHRASE,
@@ -279,16 +283,23 @@ async function sacBalance(
     );
     builder.setTimeout(300);
     const tx = builder.build();
-    tx.sign(signer);
-    const sim: any = await rpcServer._simulateTransaction(tx);
-    if (sim.error || !sim.results?.[0]?.xdr) {
-      console.warn(
-        `  (SAC balance read failed for ${address.slice(0, 8)}...: ${sim.error ?? 'no result'})`,
-      );
+    const sim: any = await rpcServer.simulateTransaction(tx);
+    if (sim?.error) {
+      console.warn(`  (SAC balance read failed for ${address.slice(0, 8)}...: ${sim.error})`);
       return null;
     }
-    const result = xdr.ScVal.fromXDR(sim.results[0].xdr, 'base64');
-    const native = (await import('@stellar/stellar-sdk')).scValToNative(result);
+    // stellar-sdk 16 returns one parsed `result.retval`; 12 returned a
+    // `results[]` array of base64 XDR blobs. Accept either.
+    const retval: xdr.ScVal | undefined = sim?.result?.retval
+      ? sim.result.retval
+      : sim?.results?.[0]?.xdr
+        ? xdr.ScVal.fromXDR(sim.results[0].xdr, 'base64')
+        : undefined;
+    if (!retval) {
+      console.warn(`  (SAC balance read failed for ${address.slice(0, 8)}...: no result)`);
+      return null;
+    }
+    const native = (await import('@stellar/stellar-sdk')).scValToNative(retval);
     const stroops = BigInt(native as number | string);
     return { stroops, usdc: (Number(stroops) / 1_000_000).toFixed(2) };
   } catch (err: any) {
@@ -620,20 +631,49 @@ async function runPayout(fs: typeof import('fs')) {
   });
 
   // Confirmed revenue for the provider (as if the payer flow had run).
-  await prisma.payment.create({
-    data: {
+  // Upserted, not created: `Payment.txHash` is unique, so a second run of the
+  // leg would otherwise die on P2002 before reaching the payout flow.
+  //
+  // The amount must leave *exactly* 1 USDC payable. Every prior run leaves its
+  // proposal on the ledger, and the service only proposes while confirmed
+  // revenue exceeds what is already reserved — a fixed 1 USDC seed goes to zero
+  // pending after the first run and the leg then fails with
+  // "No pending confirmed revenue to pay out".
+  const reservedAggregate = await prisma.payoutProposal.aggregate({
+    where: { providerId: provider.id, status: { in: [...PAYOUT_RESERVING_STATUSES] } },
+    _sum: { amount: true },
+  });
+  const seedAmount = (reservedAggregate._sum.amount ?? 0n) + 1_000_000n; // +1 USDC
+
+  const seedTxHash = 'a'.repeat(64);
+  await prisma.payment.upsert({
+    where: { txHash: seedTxHash },
+    update: {
+      routeId: route.id,
+      providerId: provider.id,
+      amount: seedAmount,
+      asset: 'USDC',
+      status: 'confirmed',
+      verifiedAt: new Date(),
+    },
+    create: {
       quoteId: `payout-quote-${Date.now()}`,
       routeId: route.id,
       providerId: provider.id,
-      txHash: 'a'.repeat(64),
+      txHash: seedTxHash,
       payerAddress: 'G' + '1'.repeat(55),
-      amount: 1_000_000n, // 1 USDC in stroops
+      amount: seedAmount,
       asset: 'USDC',
       status: 'confirmed',
       verifiedAt: new Date(),
     },
   });
-  step('seed', { providerId: provider.id, routeId: route.id, revenueStroops: '1000000' });
+  step('seed', {
+    providerId: provider.id,
+    routeId: route.id,
+    revenueStroops: seedAmount.toString(),
+    alreadyReservedStroops: (reservedAggregate._sum.amount ?? 0n).toString(),
+  });
 
   // ── 5. Auth as the provider owner (challenge → sign → verify) ──
   console.log('\n── Step 5: authenticate as provider owner (wallet auth) ──');
@@ -725,7 +765,15 @@ async function runPayout(fs: typeof import('fs')) {
   const outPath = process.env.EVIDENCE_PATH || 'docs/evidence/testnet-journey.json';
   const existing = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, 'utf-8')) : {};
   existing.payout = evidence;
-  fs.writeFileSync(outPath, JSON.stringify(existing, null, 2));
+  // i128 balances are BigInt, which JSON.stringify rejects — stringify them.
+  fs.writeFileSync(
+    outPath,
+    JSON.stringify(
+      existing,
+      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+      2,
+    ),
+  );
   console.log(`\n📄 Payout evidence appended to ${outPath}`);
 
   console.log(

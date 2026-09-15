@@ -3,6 +3,9 @@
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
     "module": "commonjs",
+    // Required so ts-jest can transform the ESM-only packages pulled in by
+    // stellar-sdk 16 (see transformIgnorePatterns in jest.config.ts).
+    "allowJs": true,
     "types": ["jest", "node"]
   },
   "include": ["src/**/*.spec.ts", "src/**/*.test.ts"]

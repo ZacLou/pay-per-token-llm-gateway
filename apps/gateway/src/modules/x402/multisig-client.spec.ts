@@ -76,19 +76,19 @@ const BASE = {
   networkPassphrase: 'Test SDF Network ; September 2015',
 };
 
-function makeTx(executed = false) {
+function makeTx(result?: unknown) {
   return {
     sign: mockSign,
     signAuthEntries: mockSignAuthEntries,
     send: mockSend,
-    result: executed,
+    result,
   };
 }
 
 describe('multisig-client', () => {
   describe('proposeMultisig', () => {
     it('proposes on-chain and returns the proposal id', async () => {
-      mockPropose.mockResolvedValue(makeTx(false));
+      mockPropose.mockResolvedValue(makeTx(0));
       mockSend.mockResolvedValue(undefined);
 
       const result = await proposeMultisig({
@@ -138,9 +138,13 @@ describe('multisig-client', () => {
   });
 
   describe('approveMultisig', () => {
+    // The contract declares `approve(..)` as returning nothing, so execution
+    // must be read back from the proposal. These cases previously encoded
+    // `tx.result === true`, an assumption the real contract never satisfies.
     it('approves on-chain and reports execution when quorum is reached', async () => {
-      mockApprove.mockResolvedValue(makeTx(true));
+      mockApprove.mockResolvedValue(makeTx());
       mockSend.mockResolvedValue(undefined);
+      mockGetProposal.mockResolvedValue({ result: { executed: true } });
 
       const result = await approveMultisig({
         ...BASE,
@@ -153,11 +157,29 @@ describe('multisig-client', () => {
       expect(result.executed).toBe(true);
       expect(mockApprove).toHaveBeenCalledTimes(1);
       expect(mockSignAuthEntries).toHaveBeenCalled();
+      expect(mockGetProposal).toHaveBeenCalled();
     });
 
     it('reports not-executed when the approval does not reach quorum', async () => {
-      mockApprove.mockResolvedValue(makeTx(false));
+      mockApprove.mockResolvedValue(makeTx());
       mockSend.mockResolvedValue(undefined);
+      mockGetProposal.mockResolvedValue({ result: { executed: false } });
+
+      const result = await approveMultisig({
+        ...BASE,
+        signerSecret: signer1Kp.secret(),
+        signer: SIGNER1,
+        proposalId: 7,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.executed).toBe(false);
+    });
+
+    it('fails closed when the execution state cannot be confirmed', async () => {
+      mockApprove.mockResolvedValue(makeTx());
+      mockSend.mockResolvedValue(undefined);
+      mockGetProposal.mockRejectedValue(new Error('RPC unavailable'));
 
       const result = await approveMultisig({
         ...BASE,

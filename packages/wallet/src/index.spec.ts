@@ -121,13 +121,15 @@ describe('createHorizonServer', () => {
   it('creates a server for the requested network', () => {
     const server = createHorizonServer('mainnet');
     expect(server).toBeInstanceOf(Horizon.Server);
-    expect((server.serverURL as any).hostname()).toBe('horizon.stellar.org');
+    // stellar-sdk 16 exposes `serverURL` as a URL object rather than a string,
+    // so normalise before reading the hostname.
+    expect(new URL(String(server.serverURL)).hostname).toBe('horizon.stellar.org');
   });
 
   it('prefers a custom URL when provided', () => {
     const server = createHorizonServer('mainnet', 'https://custom-horizon.example.com');
     expect(server).toBeInstanceOf(Horizon.Server);
-    expect((server.serverURL as any).hostname()).toBe('custom-horizon.example.com');
+    expect(new URL(String(server.serverURL)).hostname).toBe('custom-horizon.example.com');
   });
 });
 

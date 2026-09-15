@@ -65,7 +65,8 @@ Read this before citing anything below as shipped. The columns are strict:
 | `multisig` contract          |     ✅      |        ✅        |  ✅ testnet only  |        ❌        |      ❌       |
 | TypeScript SDK               |     ✅      |        ✅        |   n/a (library)   |        ❌        |      ❌       |
 | Python / LangChain SDK       |     ✅      |        ⚠️        |   n/a (library)   |        ❌        |      ❌       |
-| Escrow settlement (metered)  |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
+| Multisig payout automation   |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
+| Escrow settlement (metered)  |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
 | Webhook + email delivery     |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
 
 **In plain terms:** everything is built and Testnet-verified; **nothing is
@@ -83,6 +84,13 @@ Two caveats behind the ⚠️ marks, because they matter for a fair reading:
   repository's evidence does not cover them end-to-end (the Python SDK is tested
   against mocks, not live Testnet; webhook/email delivery is exercised in unit
   tests, not to a real external receiver).
+- **Escrow settlement is marked ⚠️ deliberately.** The client is implemented and
+  unit-tested, and the on-chain write paths it depends on are now proven, but no
+  live `charge`/`refund` against a deployed `credit-escrow` contract has been
+  observed — the end-to-end journey uses a flat-priced route, so escrow is never
+  charged in it. It is **implemented, not testnet-verified**. Multisig payout
+  automation, by contrast, **is** verified: the payout leg executes a real USDC
+  transfer on Testnet (see [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) §6).
 
 **Not started / planned** (tracked as issues, do not present as done):
 multi-provider load balancing ([#3](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/3)),

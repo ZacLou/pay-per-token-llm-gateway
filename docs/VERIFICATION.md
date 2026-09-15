@@ -6,7 +6,8 @@ yourself. Anything that is **not** verified is listed under
 [Not verified](#not-verified) — treat that section as the honest boundary of
 this document.
 
-Last verified: **2026-09-15** · Stellar **Testnet** · commit `4db5a2b`
+Last verified: **2026-09-15** · Stellar **Testnet** · commit `3572b94` plus the
+uncommitted fixes in §8 (`#11`–`#15`)
 
 ---
 
@@ -37,7 +38,13 @@ Native XLM SAC (Testnet, network-constant):
 
 > **Note:** SAC addresses are derived per network. Deriving them without the
 > network id produces a valid-looking address where no contract exists — see
-> the bug in §8.
+> the bug in §8. The live harness now asks the `stellar` CLI for authoritative
+> IDs rather than computing them.
+>
+> The addresses above are the contracts deployed by the manual deploy script.
+> The payout leg deploys its **own** fresh multisig
+> (`CBQQSVQA…RMTL`) against the journey's self-issued USDC, so its evidence is
+> independent of the table in this section.
 
 ## 3. Prerequisites
 
@@ -82,11 +89,11 @@ Steps 3 and 4 write machine-readable receipts to
 
 ### Unit / integration
 
-| Suite                    | Result                            |
-| ------------------------ | --------------------------------- |
-| `pnpm test` (8 projects) | **244 gateway tests, 0 failures** |
-| `pnpm lint`              | 0 errors (warnings only)          |
-| `pnpm build`             | clean                             |
+| Suite                    | Result                                     |
+| ------------------------ | ------------------------------------------ |
+| `pnpm test` (8 projects) | **477 tests, 0 failures** (245 in gateway) |
+| `pnpm lint`              | 0 errors (warnings only)                   |
+| `pnpm build`             | clean                                      |
 
 ### Soroban contracts
 
@@ -126,12 +133,12 @@ Reproduce with `bash scripts/testnet-journey.sh`.
 Payment transaction, independently confirmed on Horizon:
 
 ```
-hash      0d75bef8e500be0c495e0b5360b108bed959f12f608abfbb3a426b693f814731
+hash       01a594946e5e2a9a295ede9938e5b10047594033c00a9d126cec49b39d42702c
 successful  true
-ledger     4687623
-closed      2026-09-15T08:41:42Z
-operation  payment  0.1000000 USDC
-https://stellar.expert/explorer/testnet/tx/0d75bef8e500be0c495e0b5360b108bed959f12f608abfbb3a426b693f814731
+ledger      4688142
+closed      2026-09-15T09:24:57Z
+operation   payment  0.1000000 USDC  (payer → receiver)
+https://stellar.expert/explorer/testnet/tx/01a594946e5e2a9a295ede9938e5b10047594033c00a9d126cec49b39d42702c
 ```
 
 ### Rejection cases
@@ -144,6 +151,28 @@ https://stellar.expert/explorer/testnet/tx/0d75bef8e500be0c495e0b5360b108bed959f
 Payment verification is single-use enforced in Redis **and** on-chain, and
 unknown hashes fail closed. An unpaid request never reaches the LLM.
 
+### Provider payout — the multisig actually moved funds
+
+The payout leg deploys a threshold-1 multisig, funds it with USDC, then drives
+`POST /api/v1/admin/payouts/propose` through real wallet auth. **It passes end
+to end**, and the contract transfer is confirmed on-chain:
+
+| Fact                           | Value                                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Multisig contract              | `CBQQSVQAJXWKI7DDNXRY4WR4XGIVDSWJJU4IW2RP5GUAXSHAVPP3RMTL`                                          |
+| USDC SAC                       | `CDFNZMPEDWPLMAD5SPLPSBJVZ5QW4L3LK3SIH2EUYAUJCU5JMBWQCKMJ`                                          |
+| Proposal (on-chain `executed`) | ids `4`, `5`, `6` — all `executed: true`, queried via RPC `get_proposal`                            |
+| Settlement transaction         | `a929c7408413032f28cd01ab9188829889cd9490d722ffa981d09aa555a1139f`                                  |
+| Horizon                        | `successful: true`, ledger `4688152`, `invoke_host_function` from `GCF7YNP4…`, 2026-09-15T09:25:47Z |
+| Contract balance change        | multisig SAC `67.00 → 66.00` USDC — exactly the 1 USDC proposed                                     |
+| `PayoutProposal` row           | `status=executed`, `executedAt` set, `txHash` = the settlement hash above                           |
+
+Look the transaction up yourself at
+`https://stellar.expert/explorer/testnet/tx/a929c7408413032f28cd01ab9188829889cd9490d722ffa981d09aa555a1139f`.
+
+Reproduce with `bash scripts/testnet-journey.sh` (the payout leg runs
+automatically when the multisig wasm is built).
+
 ## 7. Dashboard deployment — not functional
 
 The deployed dashboard is a **stale build**: its client bundle still resolves
@@ -151,28 +180,39 @@ the gateway URL to `http://localhost:3000`, so every request targets the
 visitor's own machine and the page stays on `Connecting…` / `Loading…`. On top
 of that, **no gateway is deployed**, so there is nothing to connect to.
 
-The client-side fix is in `main` (`647441e`) but has not been redeployed, and
-the Vercel deploy workflow has never actually run — it skipped on a missing
-`VERCEL_TOKEN` while reporting success. See `DEPLOYMENT.md` for the required
-environment (`NEXT_PUBLIC_GATEWAY_URL` in Vercel, `CORS_ORIGINS` on the
-gateway). `NEXT_PUBLIC_*` is inlined at **build** time, so changing it requires
-a rebuild.
+The client-side fix is in `main` (`647441e`) but has not been redeployed. The
+Vercel deploy workflow used to skip on a missing `VERCEL_TOKEN` while reporting
+**success** — a green no-op; it now fails the job instead, and only skips when
+the repository variable `ALLOW_DEPLOY_SKIP=true` is set explicitly. See
+`DEPLOYMENT.md` for the required environment (`NEXT_PUBLIC_GATEWAY_URL` in
+Vercel, `CORS_ORIGINS` on the gateway, which now defaults to this dashboard's
+real origin instead of a foreign disabled app). `NEXT_PUBLIC_*` is inlined at
+**build** time, so changing it requires a rebuild.
+
+**Finishing this requires credentials this repository does not contain** — a
+Vercel token plus a host for the gateway. Nothing above can be completed from
+inside the code.
 
 ## 8. Defects found and fixed during verification
 
 These were found by running the system, not by reading it.
 
-| #   | Defect                                                                                                                                                                                                                                                                                                                                                                                                                       | Evidence it was real                                                                                                                                                                                       | Status                                                                                                   |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1   | **Soroban signing used the wrong SDK API at 8 call sites.** `tx.signAuthEntries(keypair)` / `tx.sign(keypair)` pass a `Keypair` where an options object is required, and drop the promise. Result: the SDK read `publicKey` _off_ the Keypair and got the unbound method, so no auth entry matched (`NoSignatureNeeded`); `send()` ran unsigned; and the abandoned promise rejected **unhandled**, killing the Node process. | The gateway **died** on `POST /admin/payouts/propose`. Crash message contained the stringified method: `No auth entries for public key "function publicKey() { … }"`                                       | **Fixed** — now uses the SDK's `basicNodeSigner` and awaits. Gateway returns a clean `503` and stays up. |
-| 2   | Contract could not be funded with XLM via a classic `PaymentOp` — a `MuxedAccount` only carries an ed25519 key, so the contract id named a non-existent account                                                                                                                                                                                                                                                              | `tx_failed` / `op_no_destination`; the native-SAC route then succeeded ([`fe7db954…`](https://stellar.expert/explorer/testnet/tx/fe7db95403995d23e69730caab17f82afd34a0f6081af2872acae9552c7becdd))        | Fixed                                                                                                    |
-| 3   | **SAC derivation omitted the network id**, so it produced a well-formed address with no contract behind it                                                                                                                                                                                                                                                                                                                   | Reproduced the wrong value exactly (`CDF3YSDV…` vs the real `CDLZFC3S…`); RPC returned `Error(Storage, MissingValue)`. Now asked of the `stellar` CLI, which is authoritative                              | Fixed                                                                                                    |
-| 4   | A credit asset's SAC was never deployed, but the journey mints from a fresh issuer each run                                                                                                                                                                                                                                                                                                                                  | `MissingValue` on the USDC transfer; `stellar contract asset deploy` fixed it ([`7135691c…`](https://stellar.expert/explorer/testnet/tx/7135691c20bd02b58056089a85a745b978e181fa8aba22146b4225243f1002cf)) | Fixed                                                                                                    |
-| 5   | `Payment.routeId` referenced a route that was never inserted — a real foreign key                                                                                                                                                                                                                                                                                                                                            | Prisma `P2003 Foreign key constraint violated: Payment_routeId_fkey`                                                                                                                                       | Fixed                                                                                                    |
-| 6   | **Dashboard image could not be built at all** — production stage copied from `dist/apps/dashboard/.next`, but `@nx/next:build` writes to `apps/dashboard/.next`                                                                                                                                                                                                                                                              | `docker build` → `failed to compute cache key: … not found`                                                                                                                                                | Fixed                                                                                                    |
-| 7   | Dashboard container listened on 3000 while compose/probes/Service all advertise 3001                                                                                                                                                                                                                                                                                                                                         | Standalone `server.js` reads `PORT` → 3000; configmap injected `PORT=3000`                                                                                                                                 | Fixed                                                                                                    |
-| 8   | Shipped `CORS_ORIGINS` allow-listed a _different, disabled_ Vercel app                                                                                                                                                                                                                                                                                                                                                       | `x402-dashboard.vercel.app` returns `DEPLOYMENT_DISABLED`; the real origin appeared nowhere in the repo                                                                                                    | Fixed                                                                                                    |
-| 9   | CI inlining guard built only `--target builder` and asserted a path Nx never produces                                                                                                                                                                                                                                                                                                                                        | Job red for the wrong reason while the real defect sat underneath                                                                                                                                          | Fixed — now builds the full image                                                                        |
+| #   | Defect                                                                                                                                                                                                                                                                                                                                                                                                                                           | Evidence it was real                                                                                                                                                                                       | Status                                                                                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1   | **Soroban signing used the wrong SDK API at 8 call sites.** `tx.signAuthEntries(keypair)` / `tx.sign(keypair)` pass a `Keypair` where an options object is required, and drop the promise. Result: the SDK read `publicKey` _off_ the Keypair and got the unbound method, so no auth entry matched (`NoSignatureNeeded`); `send()` ran unsigned; and the abandoned promise rejected **unhandled**, killing the Node process.                     | The gateway **died** on `POST /admin/payouts/propose`. Crash message contained the stringified method: `No auth entries for public key "function publicKey() { … }"`                                       | **Fixed** — now uses the SDK's `basicNodeSigner` and awaits. Gateway returns a clean `503` and stays up.       |
+| 2   | Contract could not be funded with XLM via a classic `PaymentOp` — a `MuxedAccount` only carries an ed25519 key, so the contract id named a non-existent account                                                                                                                                                                                                                                                                                  | `tx_failed` / `op_no_destination`; the native-SAC route then succeeded ([`fe7db954…`](https://stellar.expert/explorer/testnet/tx/fe7db95403995d23e69730caab17f82afd34a0f6081af2872acae9552c7becdd))        | Fixed                                                                                                          |
+| 3   | **SAC derivation omitted the network id**, so it produced a well-formed address with no contract behind it                                                                                                                                                                                                                                                                                                                                       | Reproduced the wrong value exactly (`CDF3YSDV…` vs the real `CDLZFC3S…`); RPC returned `Error(Storage, MissingValue)`. Now asked of the `stellar` CLI, which is authoritative                              | Fixed                                                                                                          |
+| 4   | A credit asset's SAC was never deployed, but the journey mints from a fresh issuer each run                                                                                                                                                                                                                                                                                                                                                      | `MissingValue` on the USDC transfer; `stellar contract asset deploy` fixed it ([`7135691c…`](https://stellar.expert/explorer/testnet/tx/7135691c20bd02b58056089a85a745b978e181fa8aba22146b4225243f1002cf)) | Fixed                                                                                                          |
+| 5   | `Payment.routeId` referenced a route that was never inserted — a real foreign key                                                                                                                                                                                                                                                                                                                                                                | Prisma `P2003 Foreign key constraint violated: Payment_routeId_fkey`                                                                                                                                       | Fixed                                                                                                          |
+| 6   | **Dashboard image could not be built at all** — production stage copied from `dist/apps/dashboard/.next`, but `@nx/next:build` writes to `apps/dashboard/.next`                                                                                                                                                                                                                                                                                  | `docker build` → `failed to compute cache key: … not found`                                                                                                                                                | Fixed                                                                                                          |
+| 7   | Dashboard container listened on 3000 while compose/probes/Service all advertise 3001                                                                                                                                                                                                                                                                                                                                                             | Standalone `server.js` reads `PORT` → 3000; configmap injected `PORT=3000`                                                                                                                                 | Fixed                                                                                                          |
+| 8   | Shipped `CORS_ORIGINS` allow-listed a _different, disabled_ Vercel app                                                                                                                                                                                                                                                                                                                                                                           | `x402-dashboard.vercel.app` returns `DEPLOYMENT_DISABLED`; the real origin appeared nowhere in the repo                                                                                                    | Fixed                                                                                                          |     | 9   | CI inlining guard built only `--target builder` and asserted a path Nx never produces | Job red for the wrong reason while the real defect sat underneath | Fixed — now builds the full image |
+| 10  | **All five on-chain write paths built their transaction against a null account.** `Client.from({…})` omitted `publicKey`, and the SDK's `getAccount` falls back to `new Account(NULL_ACCOUNT, '0')` — so the invocation went out from an all-zero source with sequence 1 and could never be accepted. This affected `record_payment`, `charge`/`refund` escrow **and** the multisig `propose`/`approve`: the entire on-chain settlement surface. | `txBadSeq` on the payout leg; the fallback is visible in the SDK at `lib/contract/utils.js` line 115                                                                                                       | Fixed — `publicKey` is now the signing account                                                                 |
+| 11  | **The pinned SDK could not speak the network's protocol at all.** `@stellar/stellar-sdk` was pinned at `12.3.0`; Testnet runs protocol 23+, whose transaction meta the old XDR cannot decode, so **every** submitted transaction failed response parsing. Fixing `#10` did not fix the flow — it only moved the failure from `txBadSeq` to `Bad union switch: 4`.                                                                                | Reproduced in isolation against a real contract: SDK 12.3.0 → `Bad union switch: 4` at `rpc/parsers.js:37`; SDK 16.3.0 → transaction submitted (`13b35c9d…`). See §9.                                      | Fixed — upgraded to `^16.3.0` (LTS)                                                                            |
+| 12  | **Execution was inferred from a return value that never exists.** The multisig contract declares `approve(..) -> ()`, but the client did `executed = Boolean(tx.result)`. A threshold-1 payout that the contract had already transferred was recorded as merely `approved`, with `executedAt` never set. The unit test encoded the same wrong assumption (`result: true`), so it passed.                                                         | First payout run: on-chain `get_proposal(3).executed == true` while the ledger said `status=approved`, `executed=false`                                                                                    | Fixed — the proposal is read back after approval; the test now covers the real contract shape and fails closed |
+| 13  | `PayoutProposal.txHash` was never written — the settlement transaction could not be traced from the database.                                                                                                                                                                                                                                                                                                                                    | Every row had an empty `txHash` despite the column existing                                                                                                                                                | Fixed — `propose`/`approve` return the submitted hash and both the admin and cron paths persist it             |
+| 14  | The payout harness read SAC balances with a **contract** address as the Horizon source account (`/accounts/C…` → `400`), so every balance read silently returned `null` and the payout assertions could not fail.                                                                                                                                                                                                                                | `(SAC balance read failed: Bad Request)`; `multisigSacBefore/After == null` in every earlier evidence file                                                                                                 | Fixed — simulates from the signer account and reads `result.retval` (SDK 16 shape)                             |
+| 15  | The payout harness was not re-runnable: a fixed seed `Payment.txHash` tripped P2002, prior proposals consumed the seeded revenue (`No pending confirmed revenue`), and `BigInt` balances broke `JSON.stringify`.                                                                                                                                                                                                                                 | Three consecutive failures, one per cause                                                                                                                                                                  | Fixed — seed is upserted and sized to leave exactly 1 USDC payable, and evidence serialization is BigInt-safe  |
 
 ### Why the tests missed #1
 
@@ -185,26 +225,37 @@ exercised.
 
 Recorded deliberately, so nothing here is mistaken for a working feature.
 
-1. **Provider payout leg does not complete.** It now gets all the way through
-   on-chain deployment, XLM and USDC funding, wallet auth and the propose call,
-   but the proposal is rejected with **`txBadSeq`** (tx
-   `17b4f9700087f2323ab363e60d6aece0652b3f8973e78ef24b7b0ba41f5b6d5f`). The
-   contract-side transfer therefore never executes, and no payout has been
-   observed completing end-to-end.
-2. **Escrow settlement has not moved value on-chain.** The wiring is in
-   `settleEscrowDraw` and the client is now correct, but the live journey uses a
-   flat-priced route, so escrow is never charged on-chain in the verification
-   run. Treat escrow settlement as **implemented, not proven**.
-3. **No public deployment.** No gateway is hosted; the dashboard URL is stale.
-   Nothing about the deployed system is verified.
-4. **Failure-injection cases** (Postgres/Redis/RPC down, LLM provider failure,
+1. **Escrow settlement has not moved value on-chain.** The client is now
+   correct and, with defects #10–#11 fixed, nothing structural blocks it any
+   more — but no live charge/refund has been observed. The journey uses a
+   flat-priced route, so escrow is never charged in it. Treat escrow settlement
+   as **implemented, not proven** until a per-token route exercises it.
+2. **No public deployment.** No gateway is hosted; the dashboard URL is stale.
+   Nothing about the deployed system is verified. This is blocked on
+   credentials, not on code — see §7.
+3. **Failure-injection cases** (Postgres/Redis/RPC down, LLM provider failure,
    network interruption) are exercised only by unit tests with mocked
    dependencies — not against a live stack.
-5. **Webhook and email delivery** are unit-tested, not delivered to a real
+4. **Webhook and email delivery** are unit-tested, not delivered to a real
    external receiver. SSE receipt streaming is covered by e2e tests, not by a
    browser.
-6. **No external security audit.** Contracts are self-tested only.
-7. **Python/LangChain SDK** is tested against mocks, not against live Testnet.
+5. **No external security audit.** Contracts are self-tested only.
+6. **Python/LangChain SDK** is tested against mocks, not against live Testnet.
+
+### Why the SDK mattered more than it looked
+
+Nothing in the on-chain write path had ever succeeded, and that was invisible
+because these calls are wrapped in best-effort `try/catch` blocks that log a
+warning and continue. A payment still returned `200`, a dashboard still
+rendered, audit rows were still written — the on-chain half quietly did
+nothing.
+
+Three defects had to be fixed in sequence before the real blocker became
+visible, and each was only found by running the flow against live Testnet:
+the signing API misuse (§8 #1), then the null source account (§8 #10), then the
+SDK/protocol mismatch (§8 #11). **The `txBadSeq` error was the second of three
+causes, not the cause** — a fix that stopped at it would have looked correct and
+still never settled a payment.
 
 ## 10. Verifying this document yourself
 
@@ -213,7 +264,7 @@ git clone https://github.com/mallonepay/pay-per-token-llm-gateway.git
 cd pay-per-token-llm-gateway
 pnpm install --frozen-lockfile && pnpm test && pnpm lint
 for c in payment-verifier credit-escrow multisig; do (cd contracts/$c && cargo test); done
-bash scripts/testnet-journey.sh     # main journey green; payout leg fails at txBadSeq
+bash scripts/testnet-journey.sh     # main journey AND payout leg green
 bash scripts/dashboard-e2e.sh       # all checks pass
 ```
 

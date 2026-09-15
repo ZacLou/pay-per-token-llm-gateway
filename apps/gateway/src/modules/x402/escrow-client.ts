@@ -133,6 +133,12 @@ export async function chargeEscrow(options: EscrowChargeOptions): Promise<Escrow
       contractId,
       rpcUrl,
       networkPassphrase,
+      // The SDK builds the invocation against this account and takes the
+      // sequence number from it. Omit it and `getAccount` falls back to
+      // `new Account(NULL_ACCOUNT, '0')`, so the transaction is submitted from
+      // an all-zero source with sequence 1 and every call is rejected
+      // (`txBadSeq`). It must be the account that signs.
+      publicKey: adminKeypair.publicKey(),
       ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
     });
 
@@ -183,6 +189,9 @@ export async function refundEscrow(options: EscrowRefundOptions): Promise<Escrow
       contractId,
       rpcUrl,
       networkPassphrase,
+      // See chargeEscrow: without this the invocation is built against the
+      // null account and the network rejects it with `txBadSeq`.
+      publicKey: adminKeypair.publicKey(),
       ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
     });
 

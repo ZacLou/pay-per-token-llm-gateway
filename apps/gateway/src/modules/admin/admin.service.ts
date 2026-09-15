@@ -345,7 +345,13 @@ export class AdminService {
 
       const updated = await prisma.payoutProposal.update({
         where: { id: row.id },
-        data: { status: 'proposed', proposalId: proposeResult.proposalId ?? null },
+        data: {
+          status: 'proposed',
+          proposalId: proposeResult.proposalId ?? null,
+          // On-chain reference for this proposal. The approving call below
+          // replaces it with the settling transaction when the payout executes.
+          ...(proposeResult.txHash ? { txHash: proposeResult.txHash } : {}),
+        },
       });
 
       // 3. Threshold-1 auto-approve: read the multisig config; if the wallet
@@ -466,6 +472,8 @@ export class AdminService {
         approvals,
         executedAt: executed ? new Date() : null,
         error: null,
+        // The settlement transaction: the call that actually moved the funds.
+        ...(approveResult.txHash ? { txHash: approveResult.txHash } : {}),
       },
     });
 

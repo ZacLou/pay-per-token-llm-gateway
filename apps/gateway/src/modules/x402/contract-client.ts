@@ -165,6 +165,10 @@ export async function recordPaymentOnChain(
       contractId,
       rpcUrl,
       networkPassphrase,
+      // The SDK takes the transaction's source account and sequence number
+      // from this. Without it `getAccount` returns `Account(NULL_ACCOUNT, '0')`
+      // and the invocation is rejected as `txBadSeq`.
+      publicKey: adminKeypair.publicKey(),
       ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
     });
 
