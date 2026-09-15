@@ -42,17 +42,31 @@ jobs:
     # authentication error instead of saying what is missing.
     env:
       HAS_DOCKER_CREDENTIALS: ${{ secrets.DOCKER_USERNAME != '' }}
+      ALLOW_DEPLOY_SKIP: ${{ vars.ALLOW_DEPLOY_SKIP == 'true' }}
     steps:
-      # Unlike the Vercel workflow, skipping here means a release produced no
-      # images at all, so the notice is explicit that the release is incomplete.
-      - name: Docker Hub credentials not configured — skipping image push
+      # A missing credential FAILS this job, for the same reason the Vercel
+      # workflow does: a release tag is a promise that images were published.
+      # Skipping with only a warning meant a tagged release could go green
+      # having built and pushed nothing, so the version number implied an
+      # artifact that does not exist.
+      #
+      # Set the repository variable ALLOW_DEPLOY_SKIP=true to opt back into
+      # skipping (e.g. a fork with no Docker Hub account). The opt-out is
+      # explicit, per-repository and recorded in the run summary, so it can
+      # never be mistaken for a real release.
+      - name: Docker Hub credentials not configured
         if: env.HAS_DOCKER_CREDENTIALS != 'true'
         run: |
+          if [ "${ALLOW_DEPLOY_SKIP}" = 'true' ]; then
+            STATUS='skipped (ALLOW_DEPLOY_SKIP=true)'
+          else
+            STATUS='FAILED — credentials missing'
+          fi
+
           {
-            echo "### Docker image push skipped"
+            echo "### Docker image push ${STATUS}"
             echo ""
-            echo "\`DOCKER_USERNAME\` is not set, so **no release images were built or pushed** for this tag."
-            echo "This is a configuration gap, not a build failure — but the release is incomplete until it is fixed."
+            echo "\`DOCKER_USERNAME\` is not set, so **no release images were built or pushed** for \`$GITHUB_REF_NAME\`."
             echo ""
             echo "Add these repository secrets under *Settings → Secrets and variables → Actions*,"
             echo "then re-run this workflow (or push the tag again):"
@@ -61,8 +75,18 @@ jobs:
             echo "| --- | --- |"
             echo "| \`DOCKER_USERNAME\` | Docker Hub account name |"
             echo "| \`DOCKER_PASSWORD\` | Docker Hub access token (not the account password) |"
+            echo ""
+            echo "To deliberately skip instead of failing, set the repository variable"
+            echo "\`ALLOW_DEPLOY_SKIP\` to \`true\`."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=Release images not pushed::DOCKER_USERNAME is not set — no images were pushed for $GITHUB_REF_NAME."
+
+          if [ "${ALLOW_DEPLOY_SKIP}" = 'true' ]; then
+            echo "::warning title=Release images skipped::DOCKER_USERNAME is not set and ALLOW_DEPLOY_SKIP=true — no images were pushed for $GITHUB_REF_NAME."
+            exit 0
+          fi
+
+          echo "::error title=Release images cannot be pushed::DOCKER_USERNAME is not set — no images were pushed for $GITHUB_REF_NAME. See the job summary, or set ALLOW_DEPLOY_SKIP=true to skip deliberately."
+          exit 1
 
       # Every step below repeats the same condition: Actions has no step-group
       # `if:`, and a job-level `if:` cannot read `secrets`, so the gate has to be

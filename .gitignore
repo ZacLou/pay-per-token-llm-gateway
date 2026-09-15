@@ -15,6 +15,10 @@ build/
 .dashboard-e2e/
 .failure-injection/
 
+# OWASP ZAP writes its DAST reports here (the CI job mounts this dir at
+# /zap/wrk); the reports are uploaded as an artifact, not committed.
+zap-reports/
+
 # Environment
 .env
 .env.local

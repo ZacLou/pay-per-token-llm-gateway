@@ -806,22 +806,48 @@ jobs:
           fi
 
       # OWASP ZAP baseline: passive + active-lite scan of the booted gateway.
-      # Report-only for now (findings land in the DAST step summary) — the
-      # hard security gates are the pnpm audit (critical) + gitleaks jobs.
+      #
+      # This step must FAIL LOUDLY when it does not run. It used to carry
+      # `continue-on-error: true` and hand every file-writing option an
+      # absolute path, but ZAP requires the directory that holds those files
+      # to be mounted at /zap/wrk — without the `-v` below it printed its own
+      # usage text and exited 3 *before scanning anything*, while the job
+      # still reported success. The DAST gate had never once executed.
+      #
+      # Findings stay report-only (they land in the artifact and the run log);
+      # the hard security gates remain the pnpm audit (critical) and gitleaks
+      # jobs. What is enforced here is that the scan actually RAN. Verified
+      # 2026-09-15 against the real gateway: FAIL-NEW 0 / WARN-NEW 0 / PASS 66.
       - name: Run OWASP ZAP baseline scan
         run: |
+          mkdir -p "$GITHUB_WORKSPACE/zap-reports"
           docker run --rm --network host -t \
+            -v "$GITHUB_WORKSPACE/zap-reports:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://127.0.0.1:3000/ \
-            -r /zap/report-dast.html \
-            -J /zap/report-dast.json \
-            -I 200,401,402,404,503 \
+            -r report-dast.html \
+            -J report-dast.json \
+            -I \
             -l WARN
-        continue-on-error: true
+
+      # ZAP's automation framework exits 0 even when it reports "Job report
+      # failed to generate report", so the exit code alone is not evidence the
+      # scan worked. Assert the reports exist — a scan that produced nothing
+      # must not pass as a scan that did.
+      - name: Assert the DAST reports were written
+        run: |
+          set -euo pipefail
+          for f in "$GITHUB_WORKSPACE/zap-reports/report-dast.json" \
+                   "$GITHUB_WORKSPACE/zap-reports/report-dast.html"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::DAST wrote no $f — the scan did not run (is /zap/wrk mounted?)"
+              exit 1
+            fi
+          done
+          echo "OK: DAST produced both reports"
 
       - name: Upload DAST report
         uses: actions/upload-artifact@v4
         with:
           name: dast-report
-          path: /tmp/zap-report*
-        continue-on-error: true
+          path: ${{ github.workspace }}/zap-reports/report-dast.*
