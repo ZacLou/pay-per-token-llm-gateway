@@ -66,13 +66,13 @@ Read this before citing anything below as shipped. The columns are strict:
 | TypeScript SDK               |     ✅      |        ✅        |   n/a (library)   |        ❌        |      ❌       |
 | Python / LangChain SDK       |     ✅      |        ⚠️        |   n/a (library)   |        ❌        |      ❌       |
 | Multisig payout automation   |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
-| Escrow settlement (metered)  |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
+| Escrow settlement (metered)  |     ✅      |        ✅        |        ❌         |        ❌        |      ❌       |
 | Webhook + email delivery     |     ✅      |        ⚠️        |        ❌         |        ❌        |      ❌       |
 
 **In plain terms:** everything is built and Testnet-verified; **nothing is
 running in production**, and the project is **not mainnet-ready**.
 
-Two caveats behind the ⚠️ marks, because they matter for a fair reading:
+The caveats behind the remaining ⚠️ marks, because they matter for a fair reading:
 
 - **The dashboard is publicly reachable but not correct.** The deployment at
   `pay-per-token-llm-gateway-dashboard.vercel.app` is a stale build that still
@@ -84,13 +84,14 @@ Two caveats behind the ⚠️ marks, because they matter for a fair reading:
   repository's evidence does not cover them end-to-end (the Python SDK is tested
   against mocks, not live Testnet; webhook/email delivery is exercised in unit
   tests, not to a real external receiver).
-- **Escrow settlement is marked ⚠️ deliberately.** The client is implemented and
-  unit-tested, and the on-chain write paths it depends on are now proven, but no
-  live `charge`/`refund` against a deployed `credit-escrow` contract has been
-  observed — the end-to-end journey uses a flat-priced route, so escrow is never
-  charged in it. It is **implemented, not testnet-verified**. Multisig payout
-  automation, by contrast, **is** verified: the payout leg executes a real USDC
-  transfer on Testnet (see [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) §6).
+- **Escrow settlement is now Testnet-verified.** A per-token route charges the
+  metered cost and refunds the unused surplus on-chain: `bash
+scripts/testnet-escrow.sh` deploys a fresh `credit-escrow`, has a user deposit
+  USDC, drives a per-token request through the real gateway, and asserts the
+  charge and refund against the ledger. Both transactions are confirmed on
+  Horizon (see [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) §6). What is not
+  yet done is persisting those settlement hashes to the `Payment` row — they are
+  returned and logged, but not stored.
 
 **Not started / planned** (tracked as issues, do not present as done):
 multi-provider load balancing ([#3](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/3)),

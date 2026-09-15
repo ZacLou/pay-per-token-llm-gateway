@@ -55,6 +55,8 @@ export interface EscrowRefundOptions {
 export interface EscrowResult {
   success: boolean;
   error?: string;
+  /** Hash of the transaction this call submitted, when one was submitted. */
+  txHash?: string;
 }
 
 // ── Core Operations ───────────────────────────
@@ -86,15 +88,19 @@ export async function getEscrowBalance(options: EscrowBalanceOptions): Promise<s
   const { contractId, rpcUrl, networkPassphrase, user } = options;
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client: any = await buildEscrowClient({ contractId, rpcUrl, networkPassphrase });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await client.balance({ user: accountAddressToScVal(user) });
+    const tx: any = await client.balance({ user: accountAddressToScVal(user) });
 
-    // The contract returns an i128. Assemble the full 128-bit value from
-    // the SDK's decoded bigint parts.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const balance = i128ToString(result);
+    // In stellar-sdk 16 a read call resolves to an `AssembledTransaction`, and
+    // the decoded contract return value (here an i128) is exposed as
+    // `.result`. Passing the transaction object itself to the parser used to
+    // coerce every funded escrow to `0`, so each escrow-funded request was
+    // rejected as "balance insufficient: 0 < <quote>" — the feature looked
+    // wired but could never serve a request.
+    const balance = i128ToString(tx?.result);
 
     logger.info('[escrow] Balance read', {
       user: user.slice(0, 8),
@@ -149,14 +155,15 @@ export async function chargeEscrow(options: EscrowChargeOptions): Promise<Escrow
       quote_id: xdr.ScVal.scvString(quoteId),
     });
 
-    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
+    const txHash = await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     logger.info('[escrow] Charge settled on-chain', {
       user: user.slice(0, 8),
       amount,
       quoteId: quoteId.slice(0, 8),
+      txHash,
     });
-    return { success: true };
+    return { success: true, txHash };
   } catch (err) {
     // Best-effort: escrow settlement must never block the LLM response.
     const message = (err as Error).message;
@@ -202,14 +209,15 @@ export async function refundEscrow(options: EscrowRefundOptions): Promise<Escrow
       quote_id: xdr.ScVal.scvString(quoteId),
     });
 
-    await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
+    const txHash = await signAndSendContractTx(tx, adminKeypair, networkPassphrase);
 
     logger.info('[escrow] Refund settled on-chain', {
       user: user.slice(0, 8),
       amount,
       quoteId: quoteId.slice(0, 8),
+      txHash,
     });
-    return { success: true };
+    return { success: true, txHash };
   } catch (err) {
     const message = (err as Error).message;
     logger.warn(
@@ -277,7 +285,7 @@ export async function settleEscrow(options: {
 
   // Refund surplus when the caller overpaid (per-token deposit > actual cost).
   if (isOverpaid && BigInt(surplus) > 0n) {
-    await refundEscrow({
+    const refundResult = await refundEscrow({
       contractId,
       rpcUrl,
       networkPassphrase,
@@ -286,28 +294,45 @@ export async function settleEscrow(options: {
       amount: surplus,
       quoteId,
     });
+    if (!refundResult.success) {
+      // The charge already debited the caller by the full draw, so an
+      // unrefunded surplus is the caller's money stranded in the contract.
+      // Surface it as an error so it is alertable, not buried in a warning.
+      logger.error('[escrow] Surplus refund failed — caller overcharged', {
+        user: user.slice(0, 8),
+        surplus,
+        quoteId: quoteId.slice(0, 8),
+        error: refundResult.error,
+      });
+    }
   }
 }
 
 // ── Helpers ───────────────────────────────────
 
 /**
- * Convert an i128 ScVal result (as decoded by the Stellar SDK contract
- * client) into a decimal string.
+ * Convert an i128 result (as decoded by the Stellar SDK contract client) into
+ * a decimal string.
  *
- * The SDK returns a plain bigint when the value fits in 64 bits and an
- * object with `lo`/`hi` bigint parts when it does not. We handle both.
+ * The SDK returns a plain bigint when the value fits in 64 bits and an object
+ * with `lo`/`hi` bigint parts when it does not. We handle both.
+ *
+ * Fail closed: an unrecognised shape must throw, never coerce. The previous
+ * implementation read `obj.lo ?? 0n` / `obj.hi ?? 0n`, so any object without
+ * those fields (including the assembled transaction the read call actually
+ * returns) silently became `0` — indistinguishable from a genuinely empty
+ * escrow account, and wrong in the direction that denies service.
  */
 function i128ToString(value: unknown): string {
   if (typeof value === 'bigint') {
     return value.toString();
   }
   if (value && typeof value === 'object') {
-    const obj = value as { lo?: bigint; hi?: bigint };
-    const lo = obj.lo ?? 0n;
-    const hi = obj.hi ?? 0n;
-    const full = (hi << 64n) + lo;
-    return full.toString();
+    const obj = value as { lo?: unknown; hi?: unknown };
+    if (typeof obj.lo === 'bigint' && typeof obj.hi === 'bigint') {
+      return ((obj.hi << 64n) + obj.lo).toString();
+    }
   }
-  throw new Error(`Unexpected i128 result shape: ${JSON.stringify(value)}`);
+  const shape = value && typeof value === 'object' ? Object.keys(value).join(',') : typeof value;
+  throw new Error(`Unexpected escrow balance result shape: ${shape}`);
 }

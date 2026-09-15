@@ -48,7 +48,6 @@ const signer1Kp = RealSdk.Keypair.random();
 const signer2Kp = RealSdk.Keypair.random();
 const destKp = RealSdk.Keypair.random();
 
-const ADMIN = adminKp.publicKey();
 const SIGNER1 = signer1Kp.publicKey();
 const SIGNER2 = signer2Kp.publicKey();
 const DESTINATION = destKp.publicKey();
