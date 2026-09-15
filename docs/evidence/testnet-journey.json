@@ -150,7 +150,7 @@
     }
   },
   "escrow": {
-    "runAt": "2026-09-15T10:18:27.368Z",
+    "runAt": "2026-09-15T10:30:22.383Z",
     "steps": {
       "seed": {
         "providerId": "journey-escrow-provider",
@@ -161,18 +161,18 @@
       },
       "quote": {
         "quote": {
-          "id": "d671241e-98e3-446c-bc48-1f53adb3aa82",
+          "id": "c875b906-164f-4748-9d34-dbdf2f3dd351",
           "route": "/v1/chat/completions",
           "pricingModel": "per_token",
           "amount": "204800",
           "asset": "USDC",
           "assetIssuer": "GBZEPCLP4KEPOQH5NC5R72BDRERNVAOUU63WQTY6ZIE66IL6CY3YIX3H",
           "paymentAddress": "GDJNUSRNUOM5HI3EU2LLVGVYW6ABWSTDPZSICWILAEUAE65MMM6EXVLP",
-          "memo": "d671241e98e3446cbc481f53",
+          "memo": "c875b906164f47489d34dbdf",
           "network": "testnet",
-          "issuedAt": 1789467507,
-          "expiresAt": 1789467807,
-          "statusUrl": "http://127.0.0.1:3200/api/v1/payments/d671241e-98e3-446c-bc48-1f53adb3aa82/status",
+          "issuedAt": 1789468222,
+          "expiresAt": 1789468522,
+          "statusUrl": "http://127.0.0.1:3200/api/v1/payments/c875b906-164f-4748-9d34-dbdf2f3dd351/status",
           "estimatedMaxTokens": 4096,
           "perTokenPrice": "50"
         }
@@ -183,9 +183,9 @@
         "surplus": "179800",
         "contentPreview": "pong",
         "receipt": {
-          "id": "388d357f-3ebb-49ba-a1d6-017b8dd75463",
-          "quoteId": "059bbd3f-21c3-47ff-b243-ad63fe651bc4",
-          "txHash": "escrow:059bbd3f-21c3-47ff-b243-ad63fe651bc4",
+          "id": "01bccaad-4681-4262-8d00-3a19a26d0cab",
+          "quoteId": "117541fc-828e-4a3e-8393-38ffa952a063",
+          "txHash": "escrow:117541fc-828e-4a3e-8393-38ffa952a063",
           "payerAddress": "GAEAFNWF72JFBXWGTVQY3AHLYEUDWKJ3SPOSOU5SPJ2H276MJWB2NWDL",
           "amount": "204800",
           "asset": "USDC",
@@ -199,21 +199,30 @@
         "expectedActual": "25000",
         "expectedSurplus": "179800",
         "quoteAmount": "204800",
-        "revenueBefore": "844200",
-        "revenueAfter": "869200",
+        "revenueBefore": "894200",
+        "revenueAfter": "919200",
         "charged": "25000",
-        "escrowBefore": "68976000",
-        "escrowAfter": "68771200",
+        "escrowBefore": "88566400",
+        "escrowAfter": "88361600",
         "drawn": "204800",
-        "userUsdcBefore": "7920179800",
-        "userUsdcAfter": "7920359600",
+        "userUsdcBefore": "9900539400",
+        "userUsdcAfter": "9900719200",
         "refundedToUser": "179800",
-        "contractUsdcBefore": "69820200",
-        "contractUsdcAfter": "69640400",
+        "contractUsdcBefore": "89460600",
+        "contractUsdcAfter": "89280800",
         "contractDelta": "-179800",
         "contractId": "CD5VHH3PKR3OKNAFO2ZVSL3OTVUDSUHR66JAQHJE6ZNEDKJ4MNWYZA62",
         "usdcSac": "CDFNZMPEDWPLMAD5SPLPSBJVZ5QW4L3LK3SIH2EUYAUJCU5JMBWQCKMJ",
         "horizonContract": "https://horizon-testnet.stellar.org/accounts/GDJNUSRNUOM5HI3EU2LLVGVYW6ABWSTDPZSICWILAEUAE65MMM6EXVLP"
+      },
+      "db-audit": {
+        "quoteId": "117541fc-828e-4a3e-8393-38ffa952a063",
+        "settlementTxHash": "0c22f6758b61d984252afb7b4d2d2012d6b4b0f02c3ed66e2f347f7ef3ed1d1f",
+        "refundTxHash": "ada261361ae2d2303895210f4decb98225c4b9a07e180cf6ea9b43def2a42d33",
+        "horizon": {
+          "charge": "https://horizon-testnet.stellar.org/transactions/0c22f6758b61d984252afb7b4d2d2012d6b4b0f02c3ed66e2f347f7ef3ed1d1f",
+          "refund": "https://horizon-testnet.stellar.org/transactions/ada261361ae2d2303895210f4decb98225c4b9a07e180cf6ea9b43def2a42d33"
+        }
       }
     }
   }

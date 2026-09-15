@@ -59,6 +59,18 @@ export interface EscrowResult {
   txHash?: string;
 }
 
+/**
+ * The on-chain transactions a settlement produced, for persistence/auditing.
+ *
+ * Either field is absent when its leg did not run: no `chargeTxHash` when the
+ * charge failed, and no `refundTxHash` when the caller did not overpay (or the
+ * refund failed, which is logged as an error at the call site).
+ */
+export interface EscrowSettlementResult {
+  chargeTxHash?: string;
+  refundTxHash?: string;
+}
+
 // ── Core Operations ───────────────────────────
 
 async function buildEscrowClient(options: {
@@ -247,8 +259,10 @@ export async function settleEscrow(options: {
   surplus: string;
   isOverpaid: boolean;
   quoteId: string;
-}): Promise<void> {
-  if (!options.enabled || !options.adminSecret) return;
+}): Promise<EscrowSettlementResult> {
+  // Callers persist the returned hashes so the settlement is auditable from
+  // the database, not only from the gateway log.
+  if (!options.enabled || !options.adminSecret) return {};
 
   const {
     contractId,
@@ -280,8 +294,10 @@ export async function settleEscrow(options: {
       actualCost,
       error: chargeResult.error,
     });
-    return;
+    return {};
   }
+
+  const settlement: EscrowSettlementResult = { chargeTxHash: chargeResult.txHash };
 
   // Refund surplus when the caller overpaid (per-token deposit > actual cost).
   if (isOverpaid && BigInt(surplus) > 0n) {
@@ -294,7 +310,9 @@ export async function settleEscrow(options: {
       amount: surplus,
       quoteId,
     });
-    if (!refundResult.success) {
+    if (refundResult.success) {
+      settlement.refundTxHash = refundResult.txHash;
+    } else {
       // The charge already debited the caller by the full draw, so an
       // unrefunded surplus is the caller's money stranded in the contract.
       // Surface it as an error so it is alertable, not buried in a warning.
@@ -306,6 +324,8 @@ export async function settleEscrow(options: {
       });
     }
   }
+
+  return settlement;
 }
 
 // ── Helpers ───────────────────────────────────

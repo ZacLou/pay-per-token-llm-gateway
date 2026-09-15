@@ -1007,6 +1007,12 @@ export class ProxyController {
       surplus,
       isOverpaid,
       quoteId: payment.quoteId,
-    }).catch((err) => logger.error('Escrow settlement error', { traceId, error: String(err) }));
+    })
+      // Persist the settlement transactions so the charge and refund are
+      // traceable from the database, not only from the gateway log.
+      .then((settlement) =>
+        this.paymentsService.recordEscrowSettlement(payment.quoteId, settlement),
+      )
+      .catch((err) => logger.error('Escrow settlement error', { traceId, error: String(err) }));
   }
 }

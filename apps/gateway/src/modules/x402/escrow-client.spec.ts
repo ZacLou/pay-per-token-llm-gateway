@@ -264,6 +264,57 @@ describe('escrow-client', () => {
       expect(mockSend).toHaveBeenCalledTimes(1);
     });
 
+    it('returns the charge and refund transaction hashes for persistence', async () => {
+      mockClientFrom
+        .mockResolvedValueOnce({ charge: jest.fn().mockResolvedValue(makeTx()) })
+        .mockResolvedValueOnce({ refund: jest.fn().mockResolvedValue(makeTx()) });
+
+      const result = await settleEscrow({
+        ...BASE,
+        enabled: true,
+        actualCost: '100000',
+        surplus: '5000',
+        isOverpaid: true,
+      });
+
+      // These are persisted to the Payment row so the settlement is auditable
+      // from the database, not only from the gateway log.
+      expect(result.chargeTxHash).toBe(SETTLEMENT_TX_HASH);
+      expect(result.refundTxHash).toBe(SETTLEMENT_TX_HASH);
+    });
+
+    it('returns only the charge hash when the caller did not overpay', async () => {
+      mockClientFrom.mockResolvedValueOnce({ charge: jest.fn().mockResolvedValue(makeTx()) });
+
+      const result = await settleEscrow({
+        ...BASE,
+        enabled: true,
+        actualCost: '100000',
+        surplus: '0',
+        isOverpaid: false,
+      });
+
+      expect(result.chargeTxHash).toBe(SETTLEMENT_TX_HASH);
+      expect(result.refundTxHash).toBeUndefined();
+    });
+
+    it('returns no hash when the charge failed', async () => {
+      mockClientFrom.mockResolvedValueOnce({
+        charge: jest.fn().mockRejectedValue(new Error('RPC down')),
+      });
+
+      const result = await settleEscrow({
+        ...BASE,
+        enabled: true,
+        actualCost: '100000',
+        surplus: '5000',
+        isOverpaid: true,
+      });
+
+      expect(result.chargeTxHash).toBeUndefined();
+      expect(result.refundTxHash).toBeUndefined();
+    });
+
     it('skips the refund when the charge fails (never refund on a failed charge)', async () => {
       mockClientFrom.mockResolvedValueOnce({
         charge: jest.fn().mockRejectedValue(new Error('RPC down')),

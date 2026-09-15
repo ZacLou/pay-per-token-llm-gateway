@@ -71,6 +71,13 @@ model Payment {
   ledger        Int?
   verifiedAt    DateTime?
   receiptJson   Json?
+  // Credit-escrow settlement transactions. `txHash` above names the *payment*
+  // (or the synthetic `escrow:<quoteId>` for an escrow draw); these two name
+  // the on-chain settlement that followed it — the `charge` for the metered
+  // actual cost and the `refund` of any unused surplus. Null for per-request
+  // payments, which settle in the payment transfer itself.
+  settlementTxHash String?
+  refundTxHash     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -83,6 +90,8 @@ model Payment {
   @@index([providerId])
   @@index([status])
   @@index([createdAt])
+  // On-chain settlement lookup, for tracing a transaction back to a payment.
+  @@index([settlementTxHash])
 }
 
 // ── Underpayment Debts (per-token enforcement) ─

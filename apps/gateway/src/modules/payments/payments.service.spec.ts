@@ -400,6 +400,52 @@ describe('PaymentsService', () => {
     });
   });
 
+  describe('recordEscrowSettlement', () => {
+    const CHARGE_TX = 'a'.repeat(64);
+    const REFUND_TX = 'b'.repeat(64);
+
+    it('persists both settlement transactions', async () => {
+      (mockPrisma.payment.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await service.recordEscrowSettlement('quote-1', {
+        chargeTxHash: CHARGE_TX,
+        refundTxHash: REFUND_TX,
+      });
+
+      expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
+        where: { quoteId: 'quote-1' },
+        data: { settlementTxHash: CHARGE_TX, refundTxHash: REFUND_TX },
+      });
+    });
+
+    it('persists the charge alone when nothing was refunded', async () => {
+      (mockPrisma.payment.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await service.recordEscrowSettlement('quote-1', { chargeTxHash: CHARGE_TX });
+
+      // The refund column must be left untouched, not written as null — a
+      // later retry could otherwise erase a hash that was already stored.
+      expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
+        where: { quoteId: 'quote-1' },
+        data: { settlementTxHash: CHARGE_TX },
+      });
+    });
+
+    it('writes nothing when no transaction settled', async () => {
+      await service.recordEscrowSettlement('quote-1', {});
+
+      expect(mockPrisma.payment.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('swallows a database failure (settlement must not break the request path)', async () => {
+      (mockPrisma.payment.updateMany as jest.Mock).mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.recordEscrowSettlement('quote-1', { chargeTxHash: CHARGE_TX }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('recordUnderpaymentDebt', () => {
     it('creates an open debt row for a positive deficit', async () => {
       (mockPrisma.underpaymentDebt.create as jest.Mock).mockResolvedValue({ id: 'debt-1' });

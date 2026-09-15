@@ -788,6 +788,54 @@ async function runSettlement(fs: typeof import('fs')) {
     horizonContract: `${HORIZON_URL}/accounts/${admin.publicKey()}`,
   });
 
+  // ── 9. The settlement must be auditable from the database ──
+  //
+  // The on-chain hashes are useless as evidence if they live only in the
+  // gateway log, which rotates. The gateway persists the charge and refund
+  // transactions onto the draw's `Payment` row; assert them there.
+  console.log('\n── Step 9: confirm the settlement is recorded in the database ──');
+  const receipt = receiptHeader ? JSON.parse(receiptHeader) : null;
+  const quoteId: string | undefined = receipt?.quoteId;
+  check('X-Payment-Receipt names the quote', !!quoteId, String(quoteId));
+
+  type SettlementRow = { settlementTxHash: string | null; refundTxHash: string | null };
+  let row: SettlementRow | null = null;
+  const dbDeadline = Date.now() + 30_000;
+  while (quoteId && Date.now() < dbDeadline) {
+    row = await prisma.payment.findFirst({
+      where: { quoteId },
+      select: { settlementTxHash: true, refundTxHash: true },
+    });
+    if (row?.settlementTxHash && row?.refundTxHash) break;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+
+  const hex64 = /^[0-9a-f]{64}$/;
+  check(
+    'charge transaction persisted (Payment.settlementTxHash)',
+    !!row?.settlementTxHash && hex64.test(row.settlementTxHash),
+    String(row?.settlementTxHash),
+  );
+  check(
+    'refund transaction persisted (Payment.refundTxHash)',
+    !!row?.refundTxHash && hex64.test(row.refundTxHash),
+    String(row?.refundTxHash),
+  );
+  check(
+    'the two settlement transactions are distinct',
+    !!row?.settlementTxHash && row.settlementTxHash !== row.refundTxHash,
+    `${row?.settlementTxHash} / ${row?.refundTxHash}`,
+  );
+  step('db-audit', {
+    quoteId,
+    settlementTxHash: row?.settlementTxHash,
+    refundTxHash: row?.refundTxHash,
+    horizon: {
+      charge: row?.settlementTxHash ? `${HORIZON_URL}/transactions/${row.settlementTxHash}` : null,
+      refund: row?.refundTxHash ? `${HORIZON_URL}/transactions/${row.refundTxHash}` : null,
+    },
+  });
+
   // ── Evidence ──
   const outPath = process.env.EVIDENCE_PATH || 'docs/evidence/testnet-journey.json';
   const existing = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, 'utf-8')) : {};

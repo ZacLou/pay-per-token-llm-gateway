@@ -89,9 +89,9 @@ The caveats behind the remaining ⚠️ marks, because they matter for a fair re
 scripts/testnet-escrow.sh` deploys a fresh `credit-escrow`, has a user deposit
   USDC, drives a per-token request through the real gateway, and asserts the
   charge and refund against the ledger. Both transactions are confirmed on
-  Horizon (see [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) §6). What is not
-  yet done is persisting those settlement hashes to the `Payment` row — they are
-  returned and logged, but not stored.
+  Horizon (see [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) §6). Both
+  transactions are persisted to the `Payment` row (`settlementTxHash`,
+  `refundTxHash`), so a settlement is auditable from the database.
 
 **Not started / planned** (tracked as issues, do not present as done):
 multi-provider load balancing ([#3](https://github.com/mallonepay/pay-per-token-llm-gateway/issues/3)),

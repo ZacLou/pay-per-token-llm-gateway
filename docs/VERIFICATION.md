@@ -219,6 +219,24 @@ https://stellar.expert/explorer/testnet/tx/0a9d68a5244e9f2d2e5336b31059f4a6a48cc
 https://stellar.expert/explorer/testnet/tx/ecca64ad9de56f734dd1396d2273ba6951157ed88d9e97f626c61c74ea4c50ea
 ```
 
+The settlement is also **auditable from the database**. `Payment.txHash` names the
+draw (the synthetic `escrow:<quoteId>`); the charge and refund transactions are
+persisted alongside it, so the settlement can be traced without reading logs:
+
+```sql
+SELECT "quoteId", "txHash", "settlementTxHash", "refundTxHash"
+FROM "Payment" WHERE "txHash" LIKE 'escrow:%';
+```
+
+```
+ quoteId                              | txHash                                | settlementTxHash                                                 | refundTxHash
+ 0e9e0628-930e-4440-bf1a-6b5be5240839 | escrow:0e9e0628-…                     | d9722c7a5788c8e5792da38de46ca4fa11cfa36af534b5d48cede22d17a1c810 | aef8c58e5ccfa91dd84fed80ff31fc7ccf0c3b3ebb2e04e96f7237a12caaac95
+```
+
+Both were confirmed independently on Horizon (`successful: true`, ledgers
+`4688897` and `4688898`); the refund again shows `contract_debited USDC
+0.0179800` → `account_credited USDC 0.0179800`.
+
 Note on the upstream: the route points at a public HTTPS **echo** that returns
 the posted JSON, and the caller supplies the OpenAI-shaped `usage` (the gateway
 schema is `.passthrough()`). That makes the metered cost deterministic and the
@@ -289,11 +307,11 @@ must fail closed rather than report `0`).
 Recorded deliberately, so nothing here is mistaken for a working feature.
 
 1. **Escrow settlement is now verified on Testnet** (§6) — a per-token route
-   charged the metered cost and refunded the surplus, with both transactions
-   confirmed on Horizon. What is _not_ verified is escrow under concurrent
-   load, or the `charge`/`refund` hashes being surfaced beyond the gateway log
-   (the settlement path returns them, but they are not yet persisted to the
-   `Payment` row).
+   charged the metered cost and refunded the surplus, both transactions
+   confirmed on Horizon and persisted to the `Payment` row (`settlementTxHash`
+   / `refundTxHash`). What is _not_ verified is escrow under concurrent load,
+   or a refund that fails after a successful charge (the code logs that as an
+   error; no live failure was injected).
 2. **No public deployment.** No gateway is hosted; the dashboard URL is stale.
    Nothing about the deployed system is verified. This is blocked on
    credentials, not on code — see §7.

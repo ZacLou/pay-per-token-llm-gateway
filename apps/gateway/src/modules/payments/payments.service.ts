@@ -275,6 +275,39 @@ export class PaymentsService {
     });
   }
 
+  /**
+   * Record the on-chain escrow settlement transactions for a quote.
+   *
+   * `Payment.txHash` names the payment — for an escrow draw that is the
+   * synthetic `escrow:<quoteId>`. These columns name the settlement that
+   * followed it: the `charge` for the metered actual cost and the `refund` of
+   * any unused surplus. Without them a settlement is traceable only from the
+   * gateway log, which is not auditable after a log rotation.
+   *
+   * Best-effort: the LLM response has already been delivered and the funds have
+   * already moved, so a bookkeeping failure must never propagate.
+   */
+  async recordEscrowSettlement(
+    quoteId: string,
+    settlement: { chargeTxHash?: string; refundTxHash?: string },
+  ): Promise<void> {
+    const data: { settlementTxHash?: string; refundTxHash?: string } = {};
+    if (settlement.chargeTxHash) data.settlementTxHash = settlement.chargeTxHash;
+    if (settlement.refundTxHash) data.refundTxHash = settlement.refundTxHash;
+    // Nothing settled on-chain (settlement disabled, or the charge failed).
+    if (Object.keys(data).length === 0) return;
+
+    try {
+      await prisma.payment.updateMany({ where: { quoteId }, data });
+      logger.info('Escrow settlement recorded', { quoteId, ...data });
+    } catch (err) {
+      logger.warn(
+        `Failed to record escrow settlement for quote ${quoteId} — ` +
+          `Error: ${(err as Error).message}`,
+      );
+    }
+  }
+
   // ── Underpayment debt ledger (per-token enforcement) ─
 
   /**
