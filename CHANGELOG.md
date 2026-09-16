@@ -8,6 +8,42 @@ All notable changes to the x402 LLM Gateway project.
 
 ### Fixed
 
+- **A browser wallet can now complete a sign-in: challenge verification accepts
+  the SEP-53 signature wallets actually produce.** `verifyChallenge` in
+  `@x402/wallet` verified a raw signature over the challenge bytes — the shape
+  this repository's own SDK/CLI signer produces — while every browser wallet
+  signs a _message_ per SEP-53, as
+  `sha256("Stellar Signed Message:\n" + challenge)`. Measured against a live
+  gateway: a raw signature for a keypair verified, the same keypair's SEP-53
+  signature for the same challenge returned `401 Invalid signature`, so no
+  browser wallet could log in even once the page reached one. Both shapes are
+  now accepted, and each is a fixed function of the server-issued challenge, so
+  a signature captured for another challenge — or a transaction signature —
+  still fails. The alternative, trusting a signature payload the client hands
+  back, would make a captured signature replayable.
+  `packages/wallet/src/index.spec.ts` pins the SEP-53 preimage and the four
+  rejection cases: another challenge, another keypair, a non-base64 signature and
+  a transaction signature used as a login signature.
+
+- **The dashboard login page reaches wallets through their SDKs, not injected
+  globals.** It read `window.freighterApi`, `window.xBullSDK` and
+  `window.albedo` while no package was loaded to define any of them, so
+  detection always failed and the page never made a single request to the
+  gateway: every click ended in "wallet not found" while both API calls behind
+  it worked. `window.freighterApi` exists only when the library is loaded from a
+  CDN `<script>` tag and `window.xBullSDK` only inside the xBull extension's own
+  injected context, so for an app built with a bundler the SDKs are the only
+  supported path. Freighter and xBull now connect and sign through
+  `@stellar/freighter-api` and `@creit.tech/xbull-wallet-connect`, imported
+  lazily so they load only on a click.
+
+  **Albedo is removed rather than left as a button that cannot work.**
+  `albedo.signMessage` returns a signature over a message Albedo derives from
+  the public key and the original text, and that derivation is not published, so
+  the gateway cannot check it; verifying the returned signature against the
+  client-supplied bytes would make a captured signature replayable as a login.
+  The README and roadmap entries that listed Albedo as supported are corrected.
+
 - **Dashboard sign-in no longer depends on a cross-site cookie.** With
   `NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true` the page calls `/api/v1/*` on its own
   origin and the rewrite in `apps/dashboard/next.config.js` proxies that to the
@@ -204,6 +240,32 @@ All notable changes to the x402 LLM Gateway project.
   a private repository, and `EVIDENCE_OUT` writes the JSON report. Unlike the
   production smoke check it has no default evidence file, so running it never
   dirties the working tree.
+
+### Tests
+
+- **The dashboard login flow is covered for the first time.** It was the one
+  page where a broken wallet integration was invisible from the outside: it read
+  `window.freighterApi` / `window.xBullSDK`, nothing defined them, and every
+  click ended in "wallet not found" while the whole auth API behind it worked —
+  a defect the dashboard's specs could not see, because all of them test plain
+  `lib/*` functions.
+  `apps/dashboard/src/app/login/page.spec.tsx` now renders the real page with
+  React Testing Library and mocks the two wallet SDKs, `next/navigation` and
+  `@/lib/api`, so the assertions are about what the page _sends_: the challenge
+  request carries the address the wallet returned, the challenge that gets signed
+  is the gateway's rather than a locally built one, both Freighter signature
+  shapes (a v4 base64 string and a v3 byte array) reach the wire base64-encoded,
+  a rejected verification renders an actionable error and leaves the buttons
+  usable, sign-in completes from the session cookie alone when the gateway returns
+  no token, and the dev-mode fallback produces a `dev-sig-` payload only when
+  `NEXT_PUBLIC_DEV_WALLET` is armed. A mutation check pins the value of the
+  suite: restoring the old undefined-global bail-out fails **11 of its 12**
+  cases.
+
+  `@testing-library/react` and `@testing-library/dom` are new dashboard
+  devDependencies, and `apps/dashboard/tsconfig.spec.json` is new because the app
+  tsconfig sets `jsx: "preserve"` for Next, which ts-jest cannot emit —
+  `jest.config.ts` now points ts-jest at the spec config.
 
 ---
 

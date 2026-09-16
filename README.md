@@ -278,7 +278,7 @@ For per-token pricing, the client sends a deposit (estimated from `max_tokens`, 
 - Route and provider CRUD management
 - Payment history with filtering and pagination
 - Audit log of all gateway operations
-- Wallet-based authentication (Freighter, xBull, Albedo)
+- Wallet-based authentication (Freighter, xBull)
 - Webhook configuration and testing
 
 ### 🔗 Client SDK
@@ -850,7 +850,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete step-by-step guide.
 - [x] TypeScript Client SDK (402 → pay → retry)
 - [x] Next.js provider dashboard with analytics
 - [x] Payment history, audit logs, webhook notifications
-- [x] Wallet-based authentication (Freighter, xBull, Albedo)
+- [x] Wallet-based authentication (Freighter, xBull)
 - [x] Soroban smart contracts (payment-verifier, credit-escrow, multisig)
 - [x] CI/CD pipeline (lint → test → build → deploy)
 - [x] Docker images and Railway/Vercel deployment configs
