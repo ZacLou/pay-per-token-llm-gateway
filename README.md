@@ -408,7 +408,40 @@ The gateway **auto-loads `.env` from the repository root on startup** — no man
 ### 2. Start Infrastructure
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml up -d
+pnpm infra:up
+```
+
+Starts **only Postgres + Redis**, which is what the from-source flow in steps 4
+and 5 needs — leaving ports 3000 and 3001 free for `pnpm dev:gateway` and
+`pnpm dev:dashboard`.
+
+> `--env-file .env` is required, and the scripts above pass it. Compose looks
+> for `.env` next to the **compose file** (`infrastructure/docker/`), not the
+> repository root, so a bare `docker compose -f infrastructure/docker/docker-compose.yml up`
+> cannot see the root `.env` and aborts on the required `JWT_SECRET` — starting
+> nothing at all, Postgres and Redis included.
+
+#### Two ways to run the app, and why they can't collide
+
+The gateway/dashboard containers live behind the Compose **`stack` profile**, so
+the two flows are separated at the command level:
+
+| Flow                                | Command                                                     | Owns            |
+| ----------------------------------- | ----------------------------------------------------------- | --------------- |
+| From source (hot reload, steps 4–5) | `pnpm infra:up` → `pnpm dev:gateway` + `pnpm dev:dashboard` | `3000` / `3001` |
+| Fully containerized                 | `pnpm docker:up`                                            | `3000` / `3001` |
+
+A plain `docker compose up` never starts the app containers — only Postgres and
+Redis — so the from-source servers can't be refused their ports by a stack you
+forgot was running. `pnpm docker:down` stops the whole project.
+
+To run **both at once**, give the containerized stack its own host ports. The
+allow-listed CORS origin, the dashboard's baked-in gateway URL and the gateway's
+402 quote URLs all follow these two variables, so nothing drifts:
+
+```bash
+GATEWAY_HOST_PORT=3100 DASHBOARD_HOST_PORT=3101 pnpm docker:build   # rebuild: the URL is inlined at build time
+GATEWAY_HOST_PORT=3100 DASHBOARD_HOST_PORT=3101 pnpm docker:up
 ```
 
 ### 3. Set Up Database
@@ -737,8 +770,11 @@ bash scripts/vercel-deploy-check.sh
 ### Docker
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml build
-docker compose -f infrastructure/docker/docker-compose.yml up -d
+pnpm docker:build   # build the gateway + dashboard images
+pnpm docker:up      # --profile stack: Postgres + Redis + gateway + dashboard
+pnpm docker:down    # stop the whole project
+
+pnpm infra:up       # Postgres + Redis only, for the from-source flow
 ```
 
 ### Contract Deployment

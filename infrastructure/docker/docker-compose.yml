@@ -28,12 +28,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Containerized app (opt-in) ───────────────────────────────
+  #
+  # `gateway` and `dashboard` sit behind the `stack` profile, so a plain
+  # `docker compose up` starts ONLY postgres + redis. That is what keeps the
+  # two dev flows from fighting:
+  #
+  #   from source  `pnpm infra:up` + `pnpm dev:gateway` / `pnpm dev:dashboard`
+  #                → owns 3000 / 3001
+  #   containers   `pnpm docker:up`  (`--profile stack`)
+  #                → starts the app only when explicitly asked for
+  #
+  # The published host ports are overridable, so both flows can run side by
+  # side instead of one failing on "port is already allocated":
+  #   GATEWAY_HOST_PORT=3100 DASHBOARD_HOST_PORT=3101 pnpm docker:up
   gateway:
+    profiles: ['stack']
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.gateway
     ports:
-      - '3000:3000'
+      - '${GATEWAY_HOST_PORT:-3000}:3000'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 10s
@@ -55,8 +70,15 @@ services:
       # Both origins are allowed by default: the local dashboard container and
       # the deployed Vercel dashboard (which calls this gateway from the
       # browser, so its origin must be allow-listed or every request fails
-      # CORS).
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,https://pay-per-token-llm-gateway-dashboard.vercel.app}
+      # CORS). The first origin tracks DASHBOARD_HOST_PORT so allow-listing
+      # keeps working when the dashboard is moved off 3001 to run alongside the
+      # from-source flow.
+      #
+      # Deliberately NOT the shared `CORS_ORIGINS`: that value lives in the root
+      # .env, is meant for the from-source gateway (which serves the dashboard
+      # on 3001), and would otherwise win here and silently pin the
+      # containerized allow-list to 3001. Set STACK_CORS_ORIGINS to replace it.
+      CORS_ORIGINS: ${STACK_CORS_ORIGINS:-http://localhost:${DASHBOARD_HOST_PORT:-3001},https://pay-per-token-llm-gateway-dashboard.vercel.app}
       # Applied by the image entrypoint before the gateway starts, so a fresh
       # `docker compose up` never boots against an empty schema. Idempotent.
       RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-true}
@@ -67,7 +89,7 @@ services:
       # NEXT_PUBLIC_GATEWAY_URL because it IS the same URL (the dashboard is
       # built with that value and calls it directly), which keeps the two from
       # drifting. Override PUBLIC_GATEWAY_URL only if they genuinely differ.
-      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}}
+      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:${GATEWAY_HOST_PORT:-3000}}}
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,6 +97,7 @@ services:
         condition: service_healthy
 
   dashboard:
+    profiles: ['stack']
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.dashboard
@@ -82,10 +105,11 @@ services:
         # Inlined into the client bundle at BUILD time (Next.js NEXT_PUBLIC_*).
         # The browser reaches the gateway on the host's published port, so this
         # must be a URL the browser can resolve — not the in-cluster `gateway`
-        # DNS name, which a browser cannot see.
-        NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}
+        # DNS name, which a browser cannot see. Tracks GATEWAY_HOST_PORT so the
+        # bundle keeps pointing at the port the gateway actually publishes.
+        NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:${GATEWAY_HOST_PORT:-3000}}
     ports:
-      - '3001:3001'
+      - '${DASHBOARD_HOST_PORT:-3001}:3001'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
       interval: 10s

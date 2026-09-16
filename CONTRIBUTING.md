@@ -94,7 +94,8 @@ openssl rand -base64 32
 
 # 5. Start PostgreSQL and Redis (choose one):
 # Option A — Docker (recommended for isolation):
-docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
+pnpm infra:up
+# (equivalent to: docker compose --env-file .env -f infrastructure/docker/docker-compose.yml up -d postgres redis)
 
 # Option B — local services:
 # Ensure PostgreSQL and Redis are running on their default ports.
@@ -141,7 +142,7 @@ x402-llm-gateway/
 │   ├── wallet/               # Stellar wallet utilities
 │   ├── authentication/       # Wallet challenge-response auth
 │   ├── analytics/            # Usage & revenue analytics service
-│   ├── notifications/        # Email/webhook/in-app notification delivery
+│   ├── notifications/        # Webhook + in-app notification delivery (no email channel)
 │   ├── shared/               # General utilities (ID generation, timestamps)
 │   └── ui/                   # Shared UI utilities
 ├── infrastructure/docker/    # Dockerfiles + compose
@@ -233,7 +234,7 @@ fix(contracts): clamp unbounded limit in paginated queries
 **Examples:**
 
 ```
-feat: implement email notification channel with nodemailer
+feat: persist the charge and refund transactions on the Payment row
 fix: re-validate upstream DNS at request time to prevent DNS rebinding SSRF
 test(contracts): add invariant tests for credit-escrow token balance equation
 chore: remove unused Session and ApiKey Prisma models

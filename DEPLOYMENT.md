@@ -398,8 +398,14 @@ start has no effect. Supply it when building the image instead:
 
 ```bash
 NEXT_PUBLIC_GATEWAY_URL=https://gateway.example.com \
-  docker compose -f infrastructure/docker/docker-compose.yml build dashboard
+  docker compose --env-file .env -f infrastructure/docker/docker-compose.yml build dashboard
 ```
+
+`--env-file .env` is required: Compose looks for `.env` next to the compose file
+(`infrastructure/docker/`), not the repository root, so without it the required
+`JWT_SECRET` in `docker-compose.yml` is unset and Compose aborts before building
+anything (`pnpm docker:build` passes the flag for you). Naming the service
+explicitly is enough — a profile-gated service still builds when it is targeted.
 
 `docker compose` forwards it as the `Dockerfile.dashboard` build arg, and the
 `deploy.yml` workflow passes the GitHub repository variable of the same name on
