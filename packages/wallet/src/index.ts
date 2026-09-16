@@ -2,6 +2,7 @@
 // @x402/wallet — Stellar wallet utilities
 // ──────────────────────────────────────────────
 
+import { createHash } from 'node:crypto';
 import {
   Keypair,
   TransactionBuilder,
@@ -242,8 +243,33 @@ export interface SignChallengeOptions {
 }
 
 /**
+ * SEP-53 domain-separation prefix.
+ *
+ * Stellar wallets sign a *message* as `sha256("Stellar Signed Message:\n" +
+ * message)` rather than the message bytes directly, so a message signature can
+ * never be replayed as a transaction signature (or as a signature for another
+ * application's message). Browser extensions implement this — Freighter's
+ * `signMessage` and xBull's `signMessage` both return a SEP-53 signature —
+ * which is why a gateway that only accepted the raw bytes rejected every real
+ * wallet login with "Invalid signature".
+ */
+export const SEP53_PREFIX = 'Stellar Signed Message:\n';
+
+/** The SEP-53 digest a wallet signs for `message`. */
+export function sep53Digest(message: string): Buffer {
+  return createHash('sha256')
+    .update(SEP53_PREFIX + message, 'utf-8')
+    .digest();
+}
+
+/**
  * Sign a challenge string for wallet-based authentication.
  * Returns the signature in base64.
+ *
+ * This is the server-side/CLI signer (a keypair held in process), so it signs
+ * the raw challenge bytes — the shape {@link verifyChallenge} also accepts.
+ * Browser wallets sign the SEP-53 digest; both are proofs of key ownership over
+ * a server-issued nonce, and both are verified here.
  */
 export function signChallenge(options: SignChallengeOptions): string {
   const keypair = Keypair.fromSecret(options.secretKey);
@@ -254,6 +280,18 @@ export function signChallenge(options: SignChallengeOptions): string {
 
 /**
  * Verify a challenge signature.
+ *
+ * Two payload shapes are accepted, because two kinds of signer exist:
+ *
+ *  - **SEP-53** — `sha256("Stellar Signed Message:\n" + challenge)`, what every
+ *    browser wallet produces for a message-signing request (Freighter, xBull).
+ *  - **raw** — the challenge bytes themselves, what {@link signChallenge} and
+ *    the SDK-based clients produce.
+ *
+ * Trying both does not weaken the check: each candidate is a fixed function of
+ * the server-issued challenge, so a signature captured for a different
+ * challenge (or for a transaction) still fails. The alternatives are to reject
+ * every real wallet or to trust a payload the client supplies — this is neither.
  */
 export function verifyChallenge(
   publicKey: StellarAddress,
@@ -262,9 +300,11 @@ export function verifyChallenge(
 ): boolean {
   try {
     const keypair = Keypair.fromPublicKey(publicKey);
-    const message = Buffer.from(challenge, 'utf-8');
     const sigBuffer = Buffer.from(signature, 'base64');
-    return keypair.verify(message, sigBuffer);
+    return (
+      keypair.verify(sep53Digest(challenge), sigBuffer) ||
+      keypair.verify(Buffer.from(challenge, 'utf-8'), sigBuffer)
+    );
   } catch (error) {
     logger.error('Challenge verification failed', { publicKey, error: String(error) });
     return false;

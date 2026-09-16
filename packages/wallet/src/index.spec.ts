@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { createHash } from 'node:crypto';
 import { Keypair, TransactionBuilder, Horizon, Networks, BASE_FEE } from '@stellar/stellar-sdk';
 import {
   generateKeypair,
@@ -12,6 +13,7 @@ import {
   accountExists,
   getAccountBalances,
   getTransaction,
+  sep53Digest,
   signChallenge,
   verifyChallenge,
 } from './index';
@@ -325,6 +327,55 @@ describe('signChallenge / verifyChallenge', () => {
 
   it('rejects a signature that is not valid base64', () => {
     expect(verifyChallenge(SOURCE_PUBLIC, CHALLENGE, '!!!not-base64!!!')).toBe(false);
+  });
+
+  // Browser wallets sign a message per SEP-53 (sha256 of the prefixed message),
+  // not the raw bytes. Before this, every real wallet login failed with
+  // "Invalid signature" while SDK-signed requests succeeded — measured against
+  // the deployed gateway.
+  describe('SEP-53 message signatures', () => {
+    const sep53Signature = (secretKey: string, message: string) =>
+      Keypair.fromSecret(secretKey).sign(sep53Digest(message)).toString('base64');
+
+    it('accepts a SEP-53 signature from a browser wallet', () => {
+      expect(
+        verifyChallenge(SOURCE_PUBLIC, CHALLENGE, sep53Signature(SOURCE_SECRET, CHALLENGE)),
+      ).toBe(true);
+    });
+
+    it('uses the documented SEP-53 preimage', () => {
+      expect(sep53Digest('hello').toString('hex')).toBe(
+        createHash('sha256').update('Stellar Signed Message:\nhello', 'utf-8').digest('hex'),
+      );
+    });
+
+    it('does not accept a SEP-53 signature for another challenge', () => {
+      expect(
+        verifyChallenge(
+          SOURCE_PUBLIC,
+          CHALLENGE,
+          sep53Signature(SOURCE_SECRET, 'another-challenge'),
+        ),
+      ).toBe(false);
+    });
+
+    it('does not accept a SEP-53 signature from another keypair', () => {
+      const other = Keypair.random();
+      expect(
+        verifyChallenge(SOURCE_PUBLIC, CHALLENGE, sep53Signature(other.secret(), CHALLENGE)),
+      ).toBe(false);
+    });
+
+    it('does not accept a transaction signature as a login signature', () => {
+      // A raw signature over the challenge is accepted (the CLI signer); a
+      // signature over anything else is not, which is what stops a captured
+      // signature from being replayed into a session.
+      const keypair = Keypair.fromSecret(SOURCE_SECRET);
+      const notAChallenge = keypair
+        .sign(Buffer.from('transfer 100 USDC', 'utf-8'))
+        .toString('base64');
+      expect(verifyChallenge(SOURCE_PUBLIC, CHALLENGE, notAChallenge)).toBe(false);
+    });
   });
 });
 
