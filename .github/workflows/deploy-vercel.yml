@@ -151,6 +151,8 @@ jobs:
       # few seconds; the check exits non-zero on every other failure anyway.
       - name: Smoke-check the deployed dashboard
         if: env.HAS_VERCEL_SECRET == 'true'
+        env:
+          EVIDENCE_ALWAYS: '1'
         run: |
           for attempt in 1 2 3; do
             if bash scripts/production-smoke.sh; then exit 0; fi

@@ -41,6 +41,11 @@
 #                   is discovered from the deployed bundle and only its
 #                   liveness is checked.
 #   EVIDENCE_OUT    JSON report path (default docs/evidence/production-smoke.json)
+#   EVIDENCE_ALWAYS set to 1 to rewrite the report even when nothing but the
+#                   run timestamp changed. The report is tracked in git, and a
+#                   re-run that proves the same thing should not show up as a
+#                   one-line timestamp diff every time the check is run; CI sets
+#                   this so its run summary always carries the current run time.
 #   SMOKE_TIMEOUT   per-request timeout in seconds (default 20)
 #
 # Exits non-zero if any check fails, so it can gate a deploy or run on a
@@ -50,6 +55,7 @@ set -euo pipefail
 DASHBOARD_URL="${DASHBOARD_URL:-https://pay-per-token-llm-gateway-dashboard.vercel.app}"
 EXPECTED_GATEWAY_URL="${GATEWAY_URL:-}"
 EVIDENCE_OUT="${EVIDENCE_OUT:-docs/evidence/production-smoke.json}"
+EVIDENCE_ALWAYS="${EVIDENCE_ALWAYS:-0}"
 SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-20}"
 
 for arg in "$@"; do
@@ -286,10 +292,16 @@ fi
 
 # ── Evidence ─────────────────────────────────────────────────────────────────
 
-node -e '
+# The report is tracked in git, so writing it unconditionally turns every run
+# of this check into a working-tree change — a one-line timestamp diff that
+# says nothing and gets committed or discarded by hand. Rewrite it only when
+# the findings actually differ; the recorded run time then means "the run that
+# produced this report", which is what a committed report means anyway.
+EVIDENCE_STATUS="$(node -e '
   const fs = require("fs");
   const path = require("path");
-  const [resultsFile, out, dashboardUrl, gatewayUrl, gatewaySource, sameOrigin] = process.argv.slice(1);
+  const { isDeepStrictEqual } = require("util");
+  const [resultsFile, out, dashboardUrl, gatewayUrl, gatewaySource, sameOrigin, always] = process.argv.slice(1);
   const steps = {};
   for (const line of fs.readFileSync(resultsFile, "utf8").split("\n")) {
     if (!line.trim()) continue;
@@ -305,12 +317,30 @@ node -e '
     steps,
     passed: Object.values(steps).every((s) => s.status !== "fail"),
   };
-  fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, JSON.stringify(report, null, 2) + "\n");
-' "$RESULTS_FILE" "$EVIDENCE_OUT" "$DASHBOARD_URL" "$GATEWAY_URL_RESOLVED" "$GATEWAY_URL_SOURCE" "$SAME_ORIGIN"
+
+  // Compare every finding except the run timestamp.
+  const findings = ({ runAt, ...rest }) => rest;
+  let previous = null;
+  try {
+    previous = JSON.parse(fs.readFileSync(out, "utf8"));
+  } catch {
+    previous = null; // absent or unparseable: write a fresh report
+  }
+  if (always !== "1" && previous && isDeepStrictEqual(findings(previous), findings(report))) {
+    console.log("UNCHANGED");
+  } else {
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, JSON.stringify(report, null, 2) + "\n");
+    console.log("WRITTEN");
+  }
+' "$RESULTS_FILE" "$EVIDENCE_OUT" "$DASHBOARD_URL" "$GATEWAY_URL_RESOLVED" "$GATEWAY_URL_SOURCE" "$SAME_ORIGIN" "$EVIDENCE_ALWAYS")"
 
 echo ""
-echo "Evidence written to ${EVIDENCE_OUT}"
+if [ "$EVIDENCE_STATUS" = "UNCHANGED" ]; then
+  echo "Evidence unchanged — ${EVIDENCE_OUT} already records these findings (set EVIDENCE_ALWAYS=1 to rewrite)"
+else
+  echo "Evidence written to ${EVIDENCE_OUT}"
+fi
 if [ "$FAILURES" -gt 0 ]; then
   echo ""
   echo "❌ Production smoke check FAILED (${FAILURES} check(s)) — the deployed dashboard is not pointed at a live gateway." >&2

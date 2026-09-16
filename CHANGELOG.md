@@ -36,6 +36,16 @@ All notable changes to the x402 LLM Gateway project.
   documented form (hop counts, `loopback`/`linklocal`/`uniquelocal`, IP and
   CIDR lists) is validated against the same rules `proxy-addr` applies.
 
+- **The production smoke check no longer leaves the working tree dirty.** Its
+  report is tracked at `docs/evidence/production-smoke.json` and embedded a
+  wall-clock `runAt`, so running the check always produced a one-line timestamp
+  diff — noise that had to be committed or discarded by hand every time. The
+  report is now rewritten only when the findings differ (a changed URL, a new
+  check, a changed result), so its `runAt` reads as "the run that produced this
+  report"; the checks themselves are re-run on every invocation either way. CI
+  sets `EVIDENCE_ALWAYS=1`, so a run summary never shows a report dated to an
+  earlier run.
+
 - **On-chain settlement works for the first time: `@stellar/stellar-sdk`
   `12.3.0` → `16.3.0` (LTS).** The pinned client predated protocol 23, which
   Testnet now runs, so it could not decode a submitted transaction's meta:

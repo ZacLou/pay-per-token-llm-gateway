@@ -482,7 +482,10 @@ then set the gateway service variables:
 - [ ] `pnpm smoke:production` passes — it reads the gateway URL out of the
       **live dashboard bundle** (not the Vercel env var) and checks that URL
       answers as a gateway, which is how a `localhost` bundle or a dead gateway
-      is caught
+      is caught. Its report at `docs/evidence/production-smoke.json` is only
+      rewritten when the findings differ (the run time otherwise changed on
+      every run, so simply running the check left the tree dirty); CI sets
+      `EVIDENCE_ALWAYS=1` so its run summary always carries the current time
 - [ ] The gateway service's **watch paths** cover everything the gateway
       bundles, not just `apps/gateway/**`. Railway's default trigger for this
       service watched only `/apps/gateway/**`, so a change under

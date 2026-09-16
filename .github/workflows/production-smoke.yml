@@ -45,6 +45,10 @@ jobs:
         env:
           DASHBOARD_URL: ${{ vars.PRODUCTION_DASHBOARD_URL }}
           GATEWAY_URL: ${{ vars.PRODUCTION_GATEWAY_URL }}
+          # CI is the one place the report must always carry this run's time:
+          # a summary showing a report from an older run reads as though the
+          # check did not run.
+          EVIDENCE_ALWAYS: '1'
         run: bash scripts/production-smoke.sh
 
       - name: Attach the report to the run summary
