@@ -14,6 +14,66 @@ import {
   REQUEST_TIMEOUT_MS,
 } from './api';
 
+describe('same-origin gateway routing', () => {
+  const originalFetch = global.fetch;
+  const originalSameOrigin = process.env.NEXT_PUBLIC_GATEWAY_SAME_ORIGIN;
+  const originalUrl = process.env.NEXT_PUBLIC_GATEWAY_URL;
+
+  function restore(key: string, value: string | undefined) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    restore('NEXT_PUBLIC_GATEWAY_SAME_ORIGIN', originalSameOrigin);
+    restore('NEXT_PUBLIC_GATEWAY_URL', originalUrl);
+    jest.resetModules();
+  });
+
+  /** Re-import the client so its module-level base is recomputed from the env. */
+  async function loadApiWithSameOrigin(): Promise<typeof import('./api')> {
+    process.env.NEXT_PUBLIC_GATEWAY_SAME_ORIGIN = 'true';
+    process.env.NEXT_PUBLIC_GATEWAY_URL = 'https://x402-gateway.up.railway.app';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+      text: async () => '[]',
+    }) as unknown as typeof fetch;
+
+    let api!: typeof import('./api');
+    // A fresh module registry, so the base is resolved again from the env above.
+    await jest.isolateModulesAsync(async () => {
+      api = await import('./api');
+    });
+    return api;
+  }
+
+  it('calls its own origin (a relative /api/v1 path), never the gateway origin', async () => {
+    // This is the whole point of same-origin mode: a request the browser makes
+    // to its own origin, so the session cookie the gateway sets through the
+    // proxy is first-party. An absolute URL here would silently restore the
+    // cross-site cookie that Safari/ITP and Chrome drop.
+    const api = await loadApiWithSameOrigin();
+
+    await api.fetchPayments();
+
+    const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(url.startsWith('/api/v1/')).toBe(true);
+    expect(url).not.toContain('railway.app');
+  });
+
+  it('keeps credentials included so the first-party cookie is sent', async () => {
+    const api = await loadApiWithSameOrigin();
+
+    await api.fetchPayments();
+
+    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect(init.credentials).toBe('include');
+  });
+});
+
 describe('in-memory session token', () => {
   it('stores a token without touching localStorage', () => {
     setSessionToken('test-token-123');

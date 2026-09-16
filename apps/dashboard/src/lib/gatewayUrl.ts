@@ -25,10 +25,83 @@
 export interface GatewayEnv {
   NODE_ENV?: string;
   NEXT_PUBLIC_GATEWAY_URL?: string;
+  NEXT_PUBLIC_GATEWAY_SAME_ORIGIN?: string;
 }
 
 /** Local development convenience target — never used in a production build. */
 export const DEV_GATEWAY_URL = 'http://localhost:3000';
+
+/** Path prefix for every gateway call, on whichever origin serves it. */
+export const API_PATH_PREFIX = '/api/v1';
+
+/**
+ * How the dashboard reaches the gateway.
+ *
+ * - `absolute`   — call the gateway's own origin directly (CORS + a cross-site
+ *                  cookie in production).
+ * - `same-origin` — call `/api/v1/*` on the dashboard's own origin; the rewrite
+ *                  in `next.config.js` proxies it to the gateway. The session
+ *                  cookie the gateway sets then belongs to the dashboard's own
+ *                  host, so it is **first-party**: no third-party-cookie
+ *                  restrictions apply (Safari's ITP and Chrome's limits both
+ *                  drop a `*.up.railway.app` cookie set from a `*.vercel.app`
+ *                  page, which is why sign-in would not stick).
+ * - `unconfigured` — a production build with nothing to call. Callers must
+ *                  treat this as a hard configuration error.
+ */
+export type GatewayMode = 'absolute' | 'same-origin' | 'unconfigured';
+
+export interface GatewayRouting {
+  mode: GatewayMode;
+  /**
+   * Gateway origin, for diagnostics. In `same-origin` mode this is the proxy
+   * target (what the rewrite forwards to), not a URL the browser dials.
+   */
+  base: string;
+  /** Base every request is joined to: `${apiBase}${path}`. */
+  apiBase: string;
+  /** Human-readable target for error messages. */
+  label: string;
+}
+
+/** True when the dashboard is configured to call the gateway through itself. */
+export function isSameOriginMode(env: GatewayEnv = readGatewayEnv()): boolean {
+  return (env.NEXT_PUBLIC_GATEWAY_SAME_ORIGIN || '').trim().toLowerCase() === 'true';
+}
+
+const UNCONFIGURED: GatewayRouting = { mode: 'unconfigured', base: '', apiBase: '', label: '' };
+
+/**
+ * Resolve how (and whether) the dashboard can reach a gateway.
+ *
+ * Same-origin mode still requires a proxy target: `next.config.js` forwards
+ * `/api/v1/*` to `NEXT_PUBLIC_GATEWAY_URL`, and with neither a configured URL
+ * nor the development default there is nothing behind the path — so it fails
+ * closed exactly like the absolute case rather than emitting requests at
+ * `/api/v1/*` that can only 404.
+ */
+export function resolveGatewayRouting(env: GatewayEnv = readGatewayEnv()): GatewayRouting {
+  const configured = (env.NEXT_PUBLIC_GATEWAY_URL || '').trim().replace(/\/+$/, '');
+  const target = configured || (env.NODE_ENV === 'production' ? '' : DEV_GATEWAY_URL);
+
+  if (!target) return UNCONFIGURED;
+
+  if (isSameOriginMode(env)) {
+    return {
+      mode: 'same-origin',
+      base: target,
+      apiBase: API_PATH_PREFIX,
+      label: `this dashboard's own ${API_PATH_PREFIX} (proxied to ${target})`,
+    };
+  }
+
+  return {
+    mode: 'absolute',
+    base: target,
+    apiBase: `${target}${API_PATH_PREFIX}`,
+    label: target,
+  };
+}
 
 /**
  * Read the build-time environment **by literal expression**.
@@ -56,6 +129,7 @@ function readGatewayEnv(): GatewayEnv {
   return {
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_GATEWAY_URL: process.env.NEXT_PUBLIC_GATEWAY_URL,
+    NEXT_PUBLIC_GATEWAY_SAME_ORIGIN: process.env.NEXT_PUBLIC_GATEWAY_SAME_ORIGIN,
   };
 }
 
@@ -64,15 +138,12 @@ function readGatewayEnv(): GatewayEnv {
  * one. Callers must treat `''` as a hard configuration error.
  */
 export function resolveGatewayUrl(env: GatewayEnv = readGatewayEnv()): string {
-  const configured = (env.NEXT_PUBLIC_GATEWAY_URL || '').trim().replace(/\/+$/, '');
-  if (configured) return configured;
-  if (env.NODE_ENV === 'production') return '';
-  return DEV_GATEWAY_URL;
+  return resolveGatewayRouting(env).base;
 }
 
-/** True when the dashboard has a usable gateway base URL. */
+/** True when the dashboard has a usable way to reach the gateway. */
 export function isGatewayConfigured(env: GatewayEnv = readGatewayEnv()): boolean {
-  return resolveGatewayUrl(env) !== '';
+  return resolveGatewayRouting(env).mode !== 'unconfigured';
 }
 
 /**
@@ -82,6 +153,18 @@ export function isGatewayConfigured(env: GatewayEnv = readGatewayEnv()): boolean
  */
 export function gatewayConfigError(env: GatewayEnv = readGatewayEnv()): string | null {
   if (isGatewayConfigured(env)) return null;
+
+  // Same-origin mode with no target is its own, more specific mistake: the
+  // request path would be right but nothing would be proxying it.
+  if (isSameOriginMode(env)) {
+    return (
+      'NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true requires NEXT_PUBLIC_GATEWAY_URL to be set ' +
+      'as the proxy target for /api/v1/*, so this production build has nothing to ' +
+      'forward to. Set it and redeploy — NEXT_PUBLIC_* values are baked into the ' +
+      'bundle at build time.'
+    );
+  }
+
   return (
     'NEXT_PUBLIC_GATEWAY_URL is not set for this production build, so the dashboard ' +
     'has no gateway to call. Set it to the public gateway URL and redeploy — ' +

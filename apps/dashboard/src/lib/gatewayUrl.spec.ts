@@ -2,9 +2,12 @@
 
 import {
   resolveGatewayUrl,
+  resolveGatewayRouting,
   isGatewayConfigured,
+  isSameOriginMode,
   gatewayConfigError,
   DEV_GATEWAY_URL,
+  API_PATH_PREFIX,
   type GatewayEnv,
 } from './gatewayUrl';
 
@@ -69,6 +72,56 @@ describe('gateway URL resolution', () => {
       const message = gatewayConfigError(env({ NODE_ENV: 'production' }));
       expect(message).toContain('NEXT_PUBLIC_GATEWAY_URL');
       expect(message).toContain('build time');
+    });
+  });
+
+  describe('same-origin routing', () => {
+    const sameOrigin = (overrides: Partial<GatewayEnv> = {}) =>
+      env({ NODE_ENV: 'production', NEXT_PUBLIC_GATEWAY_SAME_ORIGIN: 'true', ...overrides });
+
+    it('is off unless the flag is exactly "true"', () => {
+      expect(isSameOriginMode(env({ NEXT_PUBLIC_GATEWAY_URL: GATEWAY }))).toBe(false);
+      expect(isSameOriginMode(sameOrigin({ NEXT_PUBLIC_GATEWAY_URL: GATEWAY }))).toBe(true);
+      expect(isSameOriginMode(sameOrigin({ NEXT_PUBLIC_GATEWAY_SAME_ORIGIN: '1' }))).toBe(false);
+      expect(isSameOriginMode(sameOrigin({ NEXT_PUBLIC_GATEWAY_SAME_ORIGIN: ' yes ' }))).toBe(
+        false,
+      );
+    });
+
+    it('calls its own origin at /api/v1 and keeps the proxy target for diagnostics', () => {
+      const routing = resolveGatewayRouting(sameOrigin({ NEXT_PUBLIC_GATEWAY_URL: GATEWAY }));
+
+      // The request base is relative: the browser must never dial the gateway
+      // origin directly, or the cookie goes back to being third-party.
+      expect(routing.mode).toBe('same-origin');
+      expect(routing.apiBase).toBe(API_PATH_PREFIX);
+      expect(routing.apiBase.startsWith('http')).toBe(false);
+      // …and the target is still reported, so a failing proxy is diagnosable.
+      expect(routing.base).toBe(GATEWAY);
+      expect(routing.label).toContain(GATEWAY);
+    });
+
+    it('fails closed in production when the flag is on but there is no proxy target', () => {
+      // A relative base with nothing proxying it would 404 on every call — the
+      // same class of silent breakage as the localhost fallback.
+      const routing = resolveGatewayRouting(sameOrigin());
+      expect(routing.mode).toBe('unconfigured');
+      expect(routing.apiBase).toBe('');
+      expect(isGatewayConfigured(sameOrigin())).toBe(false);
+      expect(gatewayConfigError(sameOrigin())).toContain('NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true');
+    });
+
+    it('uses the development default as the proxy target in development', () => {
+      const routing = resolveGatewayRouting(env({ NEXT_PUBLIC_GATEWAY_SAME_ORIGIN: 'true' }));
+      expect(routing.mode).toBe('same-origin');
+      expect(routing.apiBase).toBe(API_PATH_PREFIX);
+      expect(routing.base).toBe(DEV_GATEWAY_URL);
+    });
+
+    it('keeps absolute routing when the flag is off', () => {
+      const routing = resolveGatewayRouting(env({ NEXT_PUBLIC_GATEWAY_URL: GATEWAY }));
+      expect(routing.mode).toBe('absolute');
+      expect(routing.apiBase).toBe(`${GATEWAY}${API_PATH_PREFIX}`);
     });
   });
 });

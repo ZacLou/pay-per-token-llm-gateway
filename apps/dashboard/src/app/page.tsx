@@ -20,10 +20,11 @@ import {
 } from 'recharts';
 import { useAnalytics, useProvider, useTimeSeries } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
-import { resolveGatewayUrl } from '@/lib/gatewayUrl';
+import { resolveGatewayUrl, isSameOriginMode } from '@/lib/gatewayUrl';
 import { format } from 'date-fns';
 
 const GATEWAY_URL = resolveGatewayUrl();
+const SAME_ORIGIN = isSameOriginMode();
 
 /** Convert a stroop amount string to USDC units without float precision loss. */
 function formatStroops(stroops: string | undefined): string {
@@ -66,13 +67,23 @@ export default function DashboardPage() {
               <>
                 {(error as Error).message}
                 {GATEWAY_URL ? (
-                  <>
-                    {' '}
-                    Make sure the gateway is reachable at{' '}
-                    <code className="bg-gray-800 px-1 rounded">{GATEWAY_URL}</code> and that its{' '}
-                    <code className="bg-gray-800 px-1 rounded">CORS_ORIGINS</code> includes this
-                    dashboard's origin.
-                  </>
+                  SAME_ORIGIN ? (
+                    <>
+                      {' '}
+                      This dashboard calls the gateway through its own{' '}
+                      <code className="bg-gray-800 px-1 rounded">/api/v1</code> proxy, which
+                      forwards to <code className="bg-gray-800 px-1 rounded">{GATEWAY_URL}</code>.
+                      Check that the gateway is up and reachable from this deployment.
+                    </>
+                  ) : (
+                    <>
+                      {' '}
+                      Make sure the gateway is reachable at{' '}
+                      <code className="bg-gray-800 px-1 rounded">{GATEWAY_URL}</code> and that its{' '}
+                      <code className="bg-gray-800 px-1 rounded">CORS_ORIGINS</code> includes this
+                      dashboard's origin.
+                    </>
+                  )
                 ) : null}
               </>
             )

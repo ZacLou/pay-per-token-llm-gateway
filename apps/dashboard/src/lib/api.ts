@@ -1,18 +1,26 @@
 /**
  * Gateway API client.
- * Calls the NestJS gateway directly (CORS is configured for dashboard origin).
+ *
+ * Two routing modes (see `gatewayUrl.ts`), chosen by configuration:
+ *   - same-origin (`NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true`) — every call goes to
+ *     `/api/v1/*` on the dashboard's own origin, which `next.config.js` proxies
+ *     to the gateway. The session cookie the gateway sets is then first-party,
+ *     so browser third-party-cookie restrictions cannot drop it.
+ *   - absolute — call the gateway's own origin directly (CORS is configured for
+ *     the dashboard origin).
  *
  * Auth strategy (defense in depth):
- *   1. httpOnly cookie — primary, works same-origin (localhost dev,
- *      Vercel + Railway production with HTTPS). Set by /auth/verify.
+ *   1. httpOnly cookie — primary. First-party in same-origin mode; a Secure,
+ *      SameSite=None cross-site cookie in absolute mode (which Safari/ITP and
+ *      Chrome's third-party-cookie limits may refuse to keep).
  *   2. Authorization header — fallback for cross-origin deployments
  *      where cookies can't be sent (Vercel HTTPS → localhost HTTP).
  *      Token is stored in memory only, never localStorage (XSS-safe).
  */
-import { resolveGatewayUrl, gatewayConfigError } from './gatewayUrl';
+import { resolveGatewayRouting, gatewayConfigError } from './gatewayUrl';
 
-const GATEWAY_URL = resolveGatewayUrl();
-const BASE = `${GATEWAY_URL}/api/v1`;
+const ROUTING = resolveGatewayRouting();
+const BASE = ROUTING.apiBase;
 
 /**
  * Hard ceiling on a single gateway call.
@@ -117,9 +125,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   } catch (err) {
     if (timedOut) {
       throw new Error(
-        `Gateway request to ${GATEWAY_URL} timed out after ${REQUEST_TIMEOUT_MS}ms. ` +
-          'The gateway is unreachable from this browser — verify NEXT_PUBLIC_GATEWAY_URL and that ' +
-          "the gateway's CORS_ORIGINS includes this dashboard's origin.",
+        `Gateway request to ${ROUTING.label} timed out after ${REQUEST_TIMEOUT_MS}ms. ` +
+          (ROUTING.mode === 'same-origin'
+            ? 'The dashboard could not reach the gateway through its own /api/v1 proxy — ' +
+              'check the gateway the deployment is proxying to (see the Vercel project env).'
+            : 'The gateway is unreachable from this browser — verify NEXT_PUBLIC_GATEWAY_URL and that ' +
+              "the gateway's CORS_ORIGINS includes this dashboard's origin."),
       );
     }
     throw err instanceof Error ? err : new Error(String(err));
