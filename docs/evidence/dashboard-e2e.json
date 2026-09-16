@@ -1,11 +1,11 @@
 {
-  "runAt": "2026-09-15T10:20:52.720Z",
+  "runAt": "2026-09-16T10:49:03.024Z",
   "gatewayUrl": "http://127.0.0.1:3200",
   "wallet": "GBW3LGL7QM7UV4UGIJXDJKI7POUFVKWVVTTYWLTNNUO4TZC6BQ4LQVXO",
   "steps": {
     "seed": {
       "providerId": "dashboard-e2e-provider",
-      "routeId": "a9e2a9b9-ffb8-4201-918c-29eee99844c5",
+      "routeId": "14ec6a5d-147f-4cc6-9823-45c7f4fa48a1",
       "model": "dashboard-e2e-model"
     },
     "auth": {
@@ -49,6 +49,39 @@
         "successRate": 0,
         "averageResponseTime": 0
       }
+    },
+    "escrow": {
+      "status": 502,
+      "balance": null,
+      "asset": null,
+      "contractId": null,
+      "error": "Could not read escrow balance from contract",
+      "note": "Soroban RPC points at a closed port in this harness by design"
+    },
+    "providerSave": {
+      "id": "2468ae16-01fd-4b71-9c5e-f7d16a3418f8",
+      "name": "E2E Write Provider (saved)"
+    },
+    "providerWebhookGuard": {
+      "status": 400,
+      "error": "Webhook URL must point to a public IP address"
+    },
+    "routeCrud": {
+      "id": "1c7b86b4-b239-416f-87b9-92abed8605da",
+      "createdPrice": "250000",
+      "editedPrice": "500000",
+      "deleted": true
+    },
+    "webhookTest": {
+      "status": 400,
+      "error": "Webhook URL must point to a public IP address",
+      "note": "a real delivery needs a public receiver; the guard refuses loopback by design, so this asserts the refusal"
+    },
+    "notificationReadState": {
+      "id": "9b632e4c-440d-46b2-a989-89f98e4c6091",
+      "unreadBefore": 1,
+      "unreadAfter": 0,
+      "markedAll": 1
     }
   },
   "passed": true

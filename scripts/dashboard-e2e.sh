@@ -11,8 +11,8 @@
 #   3. Build + start the gateway
 #   4. Run scripts/dashboard-e2e.ts, which drives apps/dashboard/src/lib/api.ts
 #      against the live gateway and asserts every page's data source returns
-#      real rows (providers, routes, payments, audit, notifications, analytics)
-#      and that a 402 moves the analytics numbers
+#      real rows (providers, routes, payments, audit, notifications, analytics,
+#      escrow) and that a 402 moves the analytics numbers
 #   5. Production-build the dashboard and assert NEXT_PUBLIC_GATEWAY_URL was
 #      inlined into the *client* bundle — the exact regression that shipped
 #      `localhost:3000` to production while every unit test passed
@@ -114,6 +114,13 @@ docker exec "$REDIS_NAME" redis-cli flushall >/dev/null 2>&1 || true
 # `env -i` gives the gateway a deterministic environment. Without it, ambient
 # variables (a developer's shell, a Codespaces .env, CI) leak in — and a stray
 # PUBLIC_GATEWAY_URL is exactly what this script exists to catch.
+#
+# SOROBAN_RPC_URL points at a closed port on purpose: the only route that talks
+# to Soroban is `GET /escrow/:address/balance`, which the dashboard leg below
+# calls. Failing fast on a refused connection keeps that check deterministic and
+# offline — the real testnet endpoint would hang on it for the RPC timeout and
+# make the check depend on Stellar network access, which this script promises
+# not to need.
 env -i \
   PATH="$PATH" \
   HOME="$HOME" \
@@ -126,6 +133,7 @@ env -i \
   REDIS_URL="redis://127.0.0.1:${REDIS_PORT}" \
   JWT_SECRET="$JWT_SECRET" \
   STELLAR_NETWORK=testnet \
+  SOROBAN_RPC_URL="http://127.0.0.1:1" \
   CORS_ORIGINS="http://localhost:3001" \
   AUTH_DEV_MODE=true \
   TRUST_PROXY=false \
