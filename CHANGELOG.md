@@ -8,6 +8,34 @@ All notable changes to the x402 LLM Gateway project.
 
 ### Fixed
 
+- **Dashboard sign-in no longer depends on a cross-site cookie.** With
+  `NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true` the page calls `/api/v1/*` on its own
+  origin and the rewrite in `apps/dashboard/next.config.js` proxies that to the
+  gateway, so the session cookie it sets is bound to the dashboard's host —
+  **first-party**. Previously a page on `*.vercel.app` called `*.up.railway.app`
+  directly, which makes the cookie third-party: Safari's ITP and Chrome's
+  third-party-cookie limits are free to drop it, so sign-in could appear to
+  succeed and then not stick. Verified against a live deployment — a real signed
+  challenge through the dashboard origin returns a host-only `Set-Cookie`
+  (`HttpOnly`, `Secure`, no `Domain`) that authenticates the next call.
+
+  Same-origin mode still fails closed: a build with the flag on and no
+  `NEXT_PUBLIC_GATEWAY_URL` breaks the build rather than shipping a dashboard
+  whose every `/api/v1` request 404s, and a production runtime without either
+  reports a configuration error instead of calling anything.
+
+- **`TRUST_PROXY=true` no longer crashes the gateway at boot.**
+  `parseTrustProxy()` mapped `''`/`false`/`0` to `false` and numeric strings to
+  numbers, then passed everything else through as a _string_ — so `true`
+  reached `app.set('trust proxy', 'true')` and `proxy-addr` threw a bare
+  `TypeError: invalid IP address: true` during bootstrap, naming neither the
+  variable nor the accepted forms. A Railway deploy failed its healthcheck on
+  exactly this. `true` now maps to the boolean Express expects, and a value
+  Express cannot compile (a typo, `*`, a hostname such as `localhost`) fails
+  fast with an actionable message instead of a cryptic boot crash; every other
+  documented form (hop counts, `loopback`/`linklocal`/`uniquelocal`, IP and
+  CIDR lists) is validated against the same rules `proxy-addr` applies.
+
 - **On-chain settlement works for the first time: `@stellar/stellar-sdk`
   `12.3.0` → `16.3.0` (LTS).** The pinned client predated protocol 23, which
   Testnet now runs, so it could not decode a submitted transaction's meta:

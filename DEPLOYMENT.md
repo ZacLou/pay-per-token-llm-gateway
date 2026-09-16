@@ -170,6 +170,7 @@ pnpm e2e:dashboard
 | Dashboard stuck on `Connecting...` / metrics stuck at `...`       | `NEXT_PUBLIC_GATEWAY_URL` missing from the Vercel build, or the gateway isn't browser-reachable | Verify the gateway above, set the variable in Vercel, then **redeploy** — it is inlined at build time, so a redeploy is mandatory |
 | Browser console reports a CORS error                              | The dashboard's origin isn't in the gateway's allow-list                                        | Add it to `CORS_ORIGINS` (comma-separated), e.g. `https://your-dashboard.vercel.app`                                              |
 | `NEXT_PUBLIC_GATEWAY_URL` set in Vercel but the site is unchanged | The value is baked in at build time; an existing deployment keeps the old bundle                | Trigger a new deployment                                                                                                          |
+| Signed in, then logged out on the next page load                  | The session cookie is third-party (gateway host set from the dashboard's origin)                | Set `NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true` so the cookie is first-party, then redeploy                                            |
 
 ---
 
@@ -201,9 +202,21 @@ Leave **Build Command** and **Output Directory** empty — they're provided by
 
 ### 2.3 Set Environment Variables
 
-| Variable                  | Value                                 |
-| ------------------------- | ------------------------------------- |
-| `NEXT_PUBLIC_GATEWAY_URL` | `https://your-gateway.up.railway.app` |
+| Variable                          | Value                                 |
+| --------------------------------- | ------------------------------------- |
+| `NEXT_PUBLIC_GATEWAY_URL`         | `https://your-gateway.up.railway.app` |
+| `NEXT_PUBLIC_GATEWAY_SAME_ORIGIN` | `true`                                |
+
+> **Set `NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true`** (recommended). The dashboard
+> then calls `/api/v1/*` on its **own** origin and the rewrite in
+> `apps/dashboard/next.config.js` proxies that to the gateway. The session cookie
+> the gateway sets is therefore bound to the dashboard's host — a **first-party**
+> cookie. Without it the browser calls the gateway's origin directly
+> (`*.up.railway.app` from a `*.vercel.app` page) and the cookie is third-party,
+> which Safari's ITP and Chrome's third-party-cookie limits may drop, in which
+> case sign-in does not stick. In same-origin mode the gateway's `CORS_ORIGINS`
+> is no longer load-bearing for the dashboard (the request is server-to-server),
+> though it is still needed for any other browser client.
 
 > ⚠️ This value is baked into the client bundle at **build time**, so set it in
 > the Vercel project → **Settings → Environment Variables** **before** the first
@@ -466,6 +479,10 @@ then set the gateway service variables:
 - [ ] Real USDC payment completes and receipt shows the real route
 - [ ] `docker compose -f infrastructure/docker/docker-compose.mainnet.yml ps` shows all services `healthy`
 - [ ] Secrets rotated, `.env.mainnet.example` never committed with values
+- [ ] `pnpm smoke:production` passes — it reads the gateway URL out of the
+      **live dashboard bundle** (not the Vercel env var) and checks that URL
+      answers as a gateway, which is how a `localhost` bundle or a dead gateway
+      is caught
 
 ---
 
