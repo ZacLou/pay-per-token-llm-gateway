@@ -181,7 +181,7 @@ export interface GatewayConfig {
      * set `TRUST_PROXY`, e.g. `1` (first hop), `loopback`, or a
      * comma-separated hop count / proxy IP list.
      */
-    trustProxy: string | number | false;
+    trustProxy: string | number | boolean;
     /**
      * When true, new providers start inactive and require an admin approve
      * call (POST /providers/:id/approve) before they can serve traffic.
@@ -418,22 +418,74 @@ export function validateEnv(): void {
   }
 }
 
+/** Named ranges `proxy-addr` understands as a bare string. */
+const TRUST_PROXY_NAMED_RANGES = ['loopback', 'linklocal', 'uniquelocal'];
+
+/** IPv4 literal, optionally with a CIDR prefix. */
+const TRUST_PROXY_IPV4 = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+
+/** IPv6 literal (loose: the caller has already established it contains a `:`). */
+const TRUST_PROXY_IPV6 = /^[0-9a-f:][0-9a-f:.]*(\/\d{1,3})?$/i;
+
+/** One entry of a comma-separated proxy list, as `proxy-addr` accepts it. */
+function isTrustProxyHost(part: string): boolean {
+  if (TRUST_PROXY_NAMED_RANGES.includes(part.toLowerCase())) return true;
+
+  if (TRUST_PROXY_IPV4.test(part)) {
+    const [address, bits] = part.split('/');
+    return (
+      address.split('.').every((octet) => Number(octet) <= 255) &&
+      (bits === undefined || Number(bits) <= 32)
+    );
+  }
+
+  return part.includes(':') && TRUST_PROXY_IPV6.test(part);
+}
+
 /**
  * Parse the `TRUST_PROXY` environment variable into an Express-compatible
  * `trust proxy` value.
  *
  * Returns `false` (the Express default — trust nothing) when unset, empty, or
  * an explicit `false`/`0`, so a directly-exposed gateway can never be tricked
- * into honouring a forged `X-Forwarded-For`. Numeric strings become numbers
- * (hop count); everything else (e.g. `loopback`, `uniquelocal`, a proxy IP
- * list) is passed through to Express as a string.
+ * into honouring a forged `X-Forwarded-For`. `true` trusts every hop, numeric
+ * strings become numbers (hop count), and the remaining values (a named range
+ * such as `loopback`, or a comma-separated IP/CIDR list) are passed through to
+ * Express as a string.
+ *
+ * An unrecognized value throws here rather than being passed through, because
+ * `proxy-addr` throws a bare `TypeError: invalid IP address: <value>` from
+ * `app.set('trust proxy', …)` — a crash at boot that names neither the variable
+ * nor the accepted forms. That exact failure took the Railway gateway down:
+ * `TRUST_PROXY=true` was handed over as the *string* `'true'`, which is not an
+ * IP address.
  */
-export function parseTrustProxy(raw: string | undefined): string | number | false {
+export function parseTrustProxy(raw: string | undefined): string | number | boolean {
   if (raw === undefined) return false;
   const value = raw.trim();
-  if (value === '' || value.toLowerCase() === 'false' || value === '0') return false;
+  if (value === '') return false;
+
+  const lower = value.toLowerCase();
+  if (lower === 'false' || value === '0') return false;
+  if (lower === 'true') return true;
   if (/^\d+$/.test(value)) return Number(value);
-  return value;
+
+  // Expressions like "127.0.0.1, 10.0.0.1" are valid — `proxy-addr` trims each
+  // entry, so the validation has to as well or a correct value gets rejected.
+  if (
+    value
+      .split(',')
+      .map((part) => part.trim())
+      .every(isTrustProxyHost)
+  )
+    return value;
+
+  throw new Error(
+    `TRUST_PROXY="${value}" is not a valid trust proxy value. Use "true" (trust every ` +
+      'hop), a hop count such as "1", "loopback"/"linklocal"/"uniquelocal", or a ' +
+      'comma-separated list of IPs and CIDRs (e.g. "10.0.0.0/8"). Use "false" or ' +
+      'leave it unset to ignore X-Forwarded-For entirely.',
+  );
 }
 
 /**
@@ -473,9 +525,11 @@ export function loadConfig(): GatewayConfig {
   assertMainnetNetworkConsistency();
 
   // Resolve TRUST_PROXY explicitly. Unset (or an explicit "false"/"0") means
-  // "do not trust proxy headers" — the safe default. A numeric value means
-  // "trust N hops"; anything else is passed through to Express verbatim
-  // (e.g. "loopback" or a comma-separated proxy IP list).
+  // "do not trust proxy headers" — the safe default. `true` trusts every hop, a
+  // numeric value means "trust N hops", and the named/IP forms ("loopback", a
+  // comma-separated proxy IP list) pass through to Express. A value Express
+  // cannot compile throws with an actionable message instead of crashing at
+  // `app.set('trust proxy', …)`.
   const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
 
   // Refuse the two configurations that silently defeat IP-based rate

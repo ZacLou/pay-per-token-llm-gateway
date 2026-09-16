@@ -104,6 +104,46 @@ describe('config security hardening', () => {
       expect(parseTrustProxy('127.0.0.1,10.0.0.1')).toBe('127.0.0.1,10.0.0.1');
     });
 
+    it('maps the boolean forms to booleans, never to a string Express cannot compile', () => {
+      // Regression: `true` used to be returned as the *string* 'true', which
+      // `proxy-addr` rejects from `app.set('trust proxy', …)` with a bare
+      // `TypeError: invalid IP address: true` — a crash at boot that named
+      // neither TRUST_PROXY nor the accepted values. It took the Railway
+      // gateway down.
+      expect(parseTrustProxy('true')).toBe(true);
+      expect(parseTrustProxy('TRUE')).toBe(true);
+      expect(parseTrustProxy(' true ')).toBe(true);
+      expect(parseTrustProxy('false')).toBe(false);
+      expect(parseTrustProxy('FALSE')).toBe(false);
+
+      // The booleans stay booleans, and hop counts stay numbers — neither is
+      // ever handed to `proxy-addr` as an unparseable string.
+      expect(parseTrustProxy('true')).toStrictEqual(true);
+      expect(parseTrustProxy('false')).toStrictEqual(false);
+      expect(parseTrustProxy('1')).toStrictEqual(1);
+    });
+
+    it('accepts every proxy form Express documents', () => {
+      expect(parseTrustProxy('linklocal')).toBe('linklocal');
+      expect(parseTrustProxy('uniquelocal')).toBe('uniquelocal');
+      expect(parseTrustProxy('LoopBack')).toBe('LoopBack');
+      expect(parseTrustProxy('10.0.0.0/8')).toBe('10.0.0.0/8');
+      expect(parseTrustProxy('127.0.0.1, 10.0.0.1')).toBe('127.0.0.1, 10.0.0.1');
+      expect(parseTrustProxy('::1')).toBe('::1');
+      expect(parseTrustProxy('2001:db8::/32')).toBe('2001:db8::/32');
+      expect(parseTrustProxy('::ffff:10.0.0.1')).toBe('::ffff:10.0.0.1');
+    });
+
+    it('rejects values Express would throw on, with a message naming the variable', () => {
+      // These all reached `proxy-addr` before, producing its opaque boot
+      // TypeError instead of a configuration error.
+      for (const bad of ['treu', 'yes', '*', 'localhost', '999.1.1.1', '1,2', 'loopback, nope']) {
+        expect(() => parseTrustProxy(bad)).toThrow(/TRUST_PROXY=/);
+      }
+      // The message has to be actionable, not just a rejection.
+      expect(() => parseTrustProxy('treu')).toThrow(/"true"/);
+    });
+
     it('does not trust proxies when TRUST_PROXY is an explicit false', () => {
       process.env.NODE_ENV = 'test';
       process.env.JWT_SECRET = 'a-real-random-256-bit-secret';
