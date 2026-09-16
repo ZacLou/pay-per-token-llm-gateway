@@ -740,8 +740,11 @@ The dashboard is a separate Vercel project whose **Root Directory must be set to
 root; there is no repository-root `vercel.json`).
 
 ```bash
-# From the repository root, with the Vercel project linked to apps/dashboard:
-vercel --prod --cwd apps/dashboard
+# From the repository root. The project's Root Directory (apps/dashboard) is
+# applied by Vercel at build time, so the upload must be the repository root —
+# deploying from apps/dashboard alone leaves the build command in
+# apps/dashboard/vercel.json without the root pnpm-lock.yaml it installs from.
+vercel --prod --yes
 ```
 
 The dashboard calls the gateway **directly from the browser**, so two settings

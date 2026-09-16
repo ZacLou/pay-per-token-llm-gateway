@@ -78,8 +78,13 @@ jobs:
             echo "rebuild), and make sure that gateway's \`CORS_ORIGINS\` lists this"
             echo "dashboard's origin."
             echo ""
-            echo "To deliberately skip instead of failing, set the repository variable"
-            echo "\`ALLOW_DEPLOY_SKIP\` to \`true\`."
+          echo "If the project's Git integration is healthy, Vercel deploys on push"
+          echo "without this workflow at all. If pushes produce no deployment, that"
+          echo "integration is what is broken — see DEPLOYMENT.md §2.5 for the"
+          echo "\`git_info_fail\` / \`repo_not_found\` signature and the fix."
+          echo ""
+          echo "To deliberately skip instead of failing, set the repository variable"
+          echo "\`ALLOW_DEPLOY_SKIP\` to \`true\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${ALLOW_DEPLOY_SKIP}" = 'true' ]; then
@@ -108,13 +113,26 @@ jobs:
         with:
           node-version: ${{ steps.nvm.outputs.NODE_VERSION }}
 
-      # The build runs on Vercel's infrastructure using the build command in
-      # apps/dashboard/vercel.json (pnpm install + next build). Note: do NOT
-      # use `nx build dashboard` here — Vercel's Root Directory is
-      # apps/dashboard, and the Nx @nx/next:build executor fails with
+      # The deploy runs the Vercel CLI at the REPOSITORY ROOT — not in
+      # apps/dashboard, and not via `nx build dashboard`.
+      #
+      # Root, because the project's Root Directory is `apps/dashboard` and
+      # Vercel applies that setting server-side while building. Uploading the
+      # repo root is what keeps the pnpm workspace intact for the build command
+      # in apps/dashboard/vercel.json (`pnpm install --frozen-lockfile`, then
+      # `pnpm exec next build`), which needs the root pnpm-lock.yaml and
+      # pnpm-workspace.yaml. Deploying from apps/dashboard uploads that
+      # directory alone, with no lockfile above it. Measured, not assumed: a
+      # `vercel deploy` from the repo root with the project's own token builds
+      # and deploys this dashboard correctly, and the resulting deployment
+      # belongs to this project.
+      #
+      # Not nx, because the @nx/next:build executor fails with
       # "ENOENT: scandir 'apps/dashboard/public'" when invoked from a
-      # subdirectory with a cold cache. Plain `next build` resolves the app
-      # dir from its own cwd and works. So no local install is needed here.
+      # subdirectory with a cold cache; plain `next build` resolves the app
+      # directory from its own cwd and works.
+      #
+      # `--yes` so a first run can never stall on an interactive prompt.
       #
       # One-time Vercel project setup:
       #   1. Import the repo and set the project Root Directory to `apps/dashboard`.
@@ -137,8 +155,7 @@ jobs:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./apps/dashboard
-          vercel-args: --prod
+          vercel-args: --prod --yes
 
       # A successful upload is not a working dashboard. The dashboard once sat
       # in production with http://localhost:3000 baked into its client bundle:
