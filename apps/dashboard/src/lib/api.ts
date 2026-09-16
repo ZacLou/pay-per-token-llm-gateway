@@ -40,6 +40,30 @@ export const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS)
  * In-memory session token for cross-origin fallback.
  * Cleared on page refresh — not persistent, not accessible to XSS.
  */
+/**
+ * A non-2xx response from the gateway.
+ *
+ * Carries the status (and body) so callers can tell "you are not signed in"
+ * from a real failure without string-matching the message — which is what the
+ * query client needs in order to stop retrying, and stop throwing, a
+ * deterministic 401. The message format is unchanged, so existing callers that
+ * do look for '401' keep working.
+ */
+export class GatewayRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(`Gateway error ${status}: ${body}`);
+    this.name = 'GatewayRequestError';
+  }
+}
+
+/** True when a failure is the gateway refusing an unauthenticated request. */
+export function isUnauthenticatedError(error: unknown): boolean {
+  return error instanceof GatewayRequestError && error.status === 401;
+}
+
 let sessionToken: string | null = null;
 
 /** Store the session token in memory (cross-origin fallback). */
@@ -141,7 +165,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Gateway error ${res.status}: ${body}`);
+    throw new GatewayRequestError(res.status, body);
   }
 
   // A 2xx with an empty body is a *successful* call with nothing to parse:

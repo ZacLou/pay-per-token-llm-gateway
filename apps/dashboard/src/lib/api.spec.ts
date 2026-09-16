@@ -1,6 +1,8 @@
 /** @jest-environment jsdom */
 
 import {
+  GatewayRequestError,
+  isUnauthenticatedError,
   setSessionToken,
   setWalletAddress,
   getWalletAddress,
@@ -13,6 +15,29 @@ import {
   deleteRoute,
   REQUEST_TIMEOUT_MS,
 } from './api';
+
+describe('auth failures are distinguishable from real failures', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  it('classifies only a 401 as an authentication failure', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => '{"message":"Missing session token"}',
+      json: async () => ({}),
+    }) as unknown as typeof fetch;
+
+    const error = await fetchNotifications().catch((e: unknown) => e);
+    expect(isUnauthenticatedError(error)).toBe(true);
+    // A 404 or a 500 must NOT be treated as "you are signed out".
+    expect(isUnauthenticatedError(new GatewayRequestError(404, 'nope'))).toBe(false);
+    expect(isUnauthenticatedError(new Error('Gateway error 401: nope'))).toBe(false);
+  });
+});
 
 describe('same-origin gateway routing', () => {
   const originalFetch = global.fetch;
@@ -152,10 +177,16 @@ describe('notification API', () => {
     expect(options.method).toBe('POST');
   });
 
-  it('throws a descriptive error when the gateway rejects the request', async () => {
+  it('throws a descriptive, typed error when the gateway rejects the request', async () => {
     mockJson({ message: 'nope' }, false, 500);
 
     await expect(fetchNotifications()).rejects.toThrow('Gateway error 500');
+
+    // The status travels with the error so the query client can stop retrying
+    // and stop throwing a deterministic 401, without matching on the message.
+    mockJson({ message: 'Missing session token' }, false, 401);
+    await expect(fetchNotifications()).rejects.toBeInstanceOf(GatewayRequestError);
+    await expect(fetchNotifications()).rejects.toMatchObject({ status: 401 });
   });
 
   it('serializes payment pagination params', async () => {
