@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-09-16T11:48:58.165Z",
+  "runAt": "2026-09-16T12:12:37.592Z",
   "dashboardUrl": "https://pay-per-token-llm-gateway-dashboard.vercel.app",
   "gatewayUrl": "https://x402gateway-production.up.railway.app",
   "gatewayUrlSource": "discovered",
@@ -11,7 +11,7 @@
     },
     "gateway_baked_in": {
       "status": "pass",
-      "detail": "the live bundle calls https://x402gateway-production.up.railway.app"
+      "detail": "the bundle targets https://x402gateway-production.up.railway.app as its proxy destination (browser calls go to the dashboard's own /api/v1)"
     },
     "gateway_health": {
       "status": "pass",

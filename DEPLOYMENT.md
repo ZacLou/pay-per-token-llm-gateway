@@ -483,6 +483,13 @@ then set the gateway service variables:
       **live dashboard bundle** (not the Vercel env var) and checks that URL
       answers as a gateway, which is how a `localhost` bundle or a dead gateway
       is caught
+- [ ] The gateway service's **watch paths** cover everything the gateway
+      bundles, not just `apps/gateway/**`. Railway's default trigger for this
+      service watched only `/apps/gateway/**`, so a change under
+      `packages/config` (the config the gateway loads at boot) was marked
+      `SKIPPED` instead of deployed — the image would silently keep running the
+      old code. Keep `/apps/gateway/**`, `/packages/**`, `/pnpm-lock.yaml` and
+      `/tsconfig.base.json`
 
 ---
 
