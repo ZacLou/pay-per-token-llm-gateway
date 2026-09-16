@@ -139,3 +139,36 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           working-directory: ./apps/dashboard
           vercel-args: --prod
+
+      # A successful upload is not a working dashboard. The dashboard once sat
+      # in production with http://localhost:3000 baked into its client bundle:
+      # every page failed in the visitor's browser (ERR_CONNECTION_REFUSED)
+      # while every deploy reported success, because a bundle aimed at the
+      # visitor's own machine looks exactly like a healthy build until it is
+      # loaded. So the deploy is not done until the LIVE deployment is checked.
+      #
+      # Retried because the production alias can lag the successful upload by a
+      # few seconds; the check exits non-zero on every other failure anyway.
+      - name: Smoke-check the deployed dashboard
+        if: env.HAS_VERCEL_SECRET == 'true'
+        run: |
+          for attempt in 1 2 3; do
+            if bash scripts/production-smoke.sh; then exit 0; fi
+            echo "::warning title=Production smoke check failed::attempt ${attempt}/3 — production may not have switched over yet"
+            sleep 15
+          done
+          echo "::error title=Production smoke check failed::the live dashboard is not pointed at a live gateway after 3 attempts"
+          exit 1
+
+      - name: Attach the smoke report to the run summary
+        if: always() && env.HAS_VERCEL_SECRET == 'true'
+        run: |
+          if [ -f docs/evidence/production-smoke.json ]; then
+            {
+              echo "### Production smoke check"
+              echo ""
+              echo '```json'
+              cat docs/evidence/production-smoke.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

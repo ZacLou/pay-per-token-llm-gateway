@@ -1,0 +1,38 @@
+{
+  "runAt": "2026-09-16T11:48:58.165Z",
+  "dashboardUrl": "https://pay-per-token-llm-gateway-dashboard.vercel.app",
+  "gatewayUrl": "https://x402gateway-production.up.railway.app",
+  "gatewayUrlSource": "discovered",
+  "sameOriginProxy": "true",
+  "steps": {
+    "dashboard_reachable": {
+      "status": "pass",
+      "detail": "HTTP 200 with Next.js client assets"
+    },
+    "gateway_baked_in": {
+      "status": "pass",
+      "detail": "the live bundle calls https://x402gateway-production.up.railway.app"
+    },
+    "gateway_health": {
+      "status": "pass",
+      "detail": "GET /health → 200 status=ok (version 0.1.0, network testnet)"
+    },
+    "gateway_ready": {
+      "status": "pass",
+      "detail": "GET /health/ready → 200 (database ok, redis ok)"
+    },
+    "gateway_serves_api": {
+      "status": "pass",
+      "detail": "GET /api/v1/providers → 401 signed out (route exists, auth enforced)"
+    },
+    "dashboard_serves_api": {
+      "status": "pass",
+      "detail": "GET https://pay-per-token-llm-gateway-dashboard.vercel.app/api/v1/providers → 401 through the dashboard's own origin (the same-origin proxy reaches the gateway, so its session cookie is first-party)"
+    },
+    "browser_reachability": {
+      "status": "skip",
+      "detail": "the gateway is reached through the dashboard's own origin — no cross-origin preflight is involved"
+    }
+  },
+  "passed": true
+}

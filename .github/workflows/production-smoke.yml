@@ -1,0 +1,61 @@
+name: Production smoke check
+
+# Guards the one thing a green deploy cannot: the deployment that is live.
+#
+# The dashboard once sat in production with `http://localhost:3000` baked into
+# its client bundle, so every page failed in the visitor's browser while every
+# deploy reported success — a build can succeed perfectly while the shipped
+# bundle points at the visitor's own machine. Only a check against the live
+# deployment can see that.
+#
+# This runs on a schedule as well as on demand, so drift is caught when nothing
+# is deploying: an env var changed in Vercel, a rebuild that dropped it, or a
+# gateway that stopped answering. It needs no secrets — the dashboard and
+# gateway URLs are public — which is also why it still works in a repo where
+# the Vercel deploy secrets are not configured yet.
+on:
+  schedule:
+    # Daily, off the hour to avoid the top-of-hour CI stampede.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Deployed dashboard points at a live gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version from .nvmrc
+        id: nvm
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvm.outputs.NODE_VERSION }}
+
+      # DASHBOARD_URL defaults to this project's Vercel production alias; set
+      # the repository variable PRODUCTION_DASHBOARD_URL (or GATEWAY_URL to pin
+      # the gateway the dashboard must be pointing at) to check a different
+      # deployment.
+      - name: Smoke-check production
+        env:
+          DASHBOARD_URL: ${{ vars.PRODUCTION_DASHBOARD_URL }}
+          GATEWAY_URL: ${{ vars.PRODUCTION_GATEWAY_URL }}
+        run: bash scripts/production-smoke.sh
+
+      - name: Attach the report to the run summary
+        if: always()
+        run: |
+          if [ -f docs/evidence/production-smoke.json ]; then
+            {
+              echo "### Production smoke check"
+              echo ""
+              echo '```json'
+              cat docs/evidence/production-smoke.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
