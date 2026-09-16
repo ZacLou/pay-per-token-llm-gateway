@@ -260,20 +260,21 @@ just no longer covers the repository. A rename of the same account is harmless;
 a transfer is not. The same thing happens after an App uninstall/reinstall, which
 mints a new credential id while the project keeps the old one.
 
-**Confirm it in two calls** (no dashboard access needed):
+**Confirm it in one command** (no dashboard access needed):
 
 ```bash
-# 1. The owner the project is linked to vs the owner the repository has now
-curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-  "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID" \
-  | jq '{org: .link.org, repoOwnerId: .link.repoOwnerId, credential: .link.gitCredentialId}'
-gh api repos/OWNER/REPO --jq '{owner_id: .owner.id, repo_id: .id}'
-
-# 2. When did git-sourced deployments stop? (source is the discriminator)
-curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-  "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=30" \
-  | jq -r '.deployments[] | [.created, .source, .readyState, (.errorCode // "-")] | @tsv'
+VERCEL_TOKEN='…' pnpm vercel:git-link-check
 ```
+
+`scripts/vercel-git-link-check.sh` compares the project's `link.repoOwnerId`
+with the repository's current `owner.id`, checks the repo id, and reports the age
+of the newest `source: git` deployment (warning past
+`MAX_GIT_DEPLOY_AGE_DAYS`, default 14). It exits non-zero when the link cannot
+be trusted and prints the fix below. Under the hood that is three calls:
+`GET /v9/projects/{id}` for `.link`, `GET /repos/{owner}/{repo}` to learn who
+owns the repository now, and `GET /v6/deployments?projectId=…` for the newest
+git-sourced deployment. Set `VERCEL_PROJECT_ID` (or run `vercel link`), and
+`GITHUB_TOKEN` only if the repository is private.
 
 A `repoOwnerId` that differs from the repository's current `owner.id`, or a
 `source: git` cutoff that matches when pushes stopped, is this failure. Note the
