@@ -374,6 +374,12 @@ docker compose -f infrastructure/docker/docker-compose.mainnet.yml up -d
 docker compose -f infrastructure/docker/docker-compose.mainnet.yml ps
 ```
 
+Both commands read their values from the environment, and Compose loads `.env`
+from the **compose file's** directory (`infrastructure/docker/`) — never the
+repository root. Copy `.env.mainnet.example` to `infrastructure/docker/.env`, or
+pass `--env-file` pointing at wherever you keep it. Without the values this file
+fails fast and starts nothing at all, Postgres included.
+
 Unlike the dev file, it **fails fast when secrets are missing**:
 
 | Variable                                                                     | Required | Purpose                                           |
@@ -458,7 +464,7 @@ then set the gateway service variables:
 - [ ] `STELLAR_NETWORK=mainnet` and mainnet `USDC_ISSUER` confirmed in the
       running config (`GET /health` or admin config view)
 - [ ] Real USDC payment completes and receipt shows the real route
-- [ ] `docker compose ps` shows all services `healthy`
+- [ ] `docker compose -f infrastructure/docker/docker-compose.mainnet.yml ps` shows all services `healthy`
 - [ ] Secrets rotated, `.env.mainnet.example` never committed with values
 
 ---
