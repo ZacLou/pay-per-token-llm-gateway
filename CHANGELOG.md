@@ -46,6 +46,26 @@ All notable changes to the x402 LLM Gateway project.
   sets `EVIDENCE_ALWAYS=1`, so a run summary never shows a report dated to an
   earlier run.
 
+- **The Vercel deploy workflow deploys from the repository root, and the
+  Git-integration failure mode behind pushes that deploy nothing is written
+  down.** The workflow ran the Vercel CLI in `apps/dashboard`, which uploads
+  that directory alone — no root `pnpm-lock.yaml`, no `pnpm-workspace.yaml` —
+  while the project's build command is `pnpm install --frozen-lockfile` followed
+  by `pnpm exec next build`. Root Directory is applied by Vercel server-side at
+  build time, so uploading the repository root is what keeps the workspace
+  intact; a `vercel deploy` from the root builds and deploys this dashboard
+  correctly (measured with the project's own token, not assumed). The README
+  carried the same `vercel --prod --cwd apps/dashboard` advice and is corrected.
+  Separately, `DEPLOYMENT.md` §2.5 now records why a push can produce **no**
+  deployment at all: a project resolves its repository through
+  `link.gitCredentialId`, the credential created for the GitHub App installation
+  on whichever account owned the repository when it was connected, so
+  **transferring the repository to another owner** silently invalidates it —
+  `git_info_fail` on a manual git deployment and `repo_not_found` on reconnect,
+  while the project itself looks healthy. Renaming the same account is
+  harmless, which is what makes the distinction easy to miss. The section gives
+  the two API calls that confirm it and the two browser steps that fix it.
+
 - **On-chain settlement works for the first time: `@stellar/stellar-sdk`
   `12.3.0` → `16.3.0` (LTS).** The pinned client predated protocol 23, which
   Testnet now runs, so it could not decode a submitted transaction's meta:

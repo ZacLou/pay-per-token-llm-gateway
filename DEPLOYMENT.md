@@ -230,6 +230,71 @@ Click **Deploy**. Vercel will install the monorepo dependencies (via
 `pnpm install --frozen-lockfile`), build the dashboard with `next build`, and
 serve the `.next` output.
 
+To deploy from CI instead of Vercel's Git integration — the same deploy on every
+push to `main`, independent of whether the Git integration is healthy — set the
+three repository secrets the `Deploy Dashboard to Vercel` workflow expects
+(`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`; see below) under
+_Settings → Secrets and variables → Actions_. That workflow runs the Vercel CLI
+at the **repository root** so the upload keeps `pnpm-lock.yaml` and
+`pnpm-workspace.yaml` intact — Root Directory (`apps/dashboard`) is applied by
+Vercel server-side at build time — and it smoke-checks the live deployment
+afterwards, so a deploy that publishes a broken bundle still fails.
+
+### 2.5 When pushes stop deploying: a stale Git credential
+
+**Symptom.** Pushes to `main` produce **no deployment at all** in Vercel — not a
+failed one. The project looks healthy, the last deployment is green, and the
+Git tab offers no explanation. A deployment triggered by hand from a commit
+fails with `errorCode: "git_info_fail"` ("Git information retrieval failed for
+this deployment"), and reconnecting the repository in the Git tab fails with
+`repo_not_found` — _“The repository … couldn't be found. Make sure there are no
+typos and that you have access to it.”_ even though the repository is right
+there and the name is spelled correctly.
+
+**Cause.** Vercel resolves a project's Git repository through
+`link.gitCredentialId`, the credential created when the GitHub App was installed
+on the **account that owned the repository at the time**. App installations are
+per-account, so **transferring the repository to a different owner** moves it out
+of the installation the project still holds — the credential remains valid, it
+just no longer covers the repository. A rename of the same account is harmless;
+a transfer is not. The same thing happens after an App uninstall/reinstall, which
+mints a new credential id while the project keeps the old one.
+
+**Confirm it in two calls** (no dashboard access needed):
+
+```bash
+# 1. The owner the project is linked to vs the owner the repository has now
+curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID" \
+  | jq '{org: .link.org, repoOwnerId: .link.repoOwnerId, credential: .link.gitCredentialId}'
+gh api repos/OWNER/REPO --jq '{owner_id: .owner.id, repo_id: .id}'
+
+# 2. When did git-sourced deployments stop? (source is the discriminator)
+curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=30" \
+  | jq -r '.deployments[] | [.created, .source, .readyState, (.errorCode // "-")] | @tsv'
+```
+
+A `repoOwnerId` that differs from the repository's current `owner.id`, or a
+`source: git` cutoff that matches when pushes stopped, is this failure. Note the
+repo **id** stays the same across a transfer, so a matching `repoId` does not
+mean the link is healthy.
+
+**Fix** — two steps, both needing a browser session (a project-scoped token
+cannot do either: it can't enumerate Git credentials, and every
+`POST /v9/projects/{id}/link` returns `repo_not_found`, which is the tell that
+the credential — not the name — is stale):
+
+1. Install/authorize the **Vercel GitHub App** for the repository's current
+   owner: <https://github.com/apps/vercel> → _Install_ → pick the organisation and
+   the repository.
+2. Vercel → project → **Settings → Git** → _Disconnect_, then **Connect**
+   `OWNER/REPO`. This writes a fresh `link.gitCredentialId`.
+
+**Verify:** push a commit, then re-run call 2 above — a new deployment appears
+with `source: git`. Production should then be the deployment for that commit;
+`pnpm smoke:production` confirms the live bundle is pointed at a live gateway.
+
 ---
 
 ## Part 3: Initialize the Gateway
