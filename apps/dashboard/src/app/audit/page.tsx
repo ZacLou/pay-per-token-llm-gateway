@@ -4,6 +4,7 @@ import { Shield, FileText, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuditLogs } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
+import { isUnauthenticatedError } from '@/lib/api';
 
 export default function AuditPage() {
   const [page, setPage] = useState(1);
@@ -24,17 +25,15 @@ export default function AuditPage() {
       {isError && (
         <ErrorState
           title={
-            (error as Error).message?.includes('401')
-              ? 'Authentication required'
-              : 'Failed to load audit logs'
+            isUnauthenticatedError(error) ? 'Authentication required' : 'Failed to load audit logs'
           }
           message={
-            (error as Error).message?.includes('401')
+            isUnauthenticatedError(error)
               ? 'Your session has expired or you are not logged in. Please connect your wallet to continue.'
               : (error as Error).message
           }
           onRetry={() => refetch()}
-          unauthenticated={(error as Error).message?.includes('401')}
+          unauthenticated={isUnauthenticatedError(error)}
         />
       )}
 

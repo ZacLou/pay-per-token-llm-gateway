@@ -4,6 +4,7 @@ import { ExternalLink, Copy, Check, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { usePayments } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
+import { isUnauthenticatedError } from '@/lib/api';
 
 export default function PaymentsPage() {
   const [page, setPage] = useState(1);
@@ -20,7 +21,7 @@ export default function PaymentsPage() {
   };
 
   if (isError) {
-    const isUnauthenticated = (error as Error).message?.includes('401');
+    const isUnauthenticated = isUnauthenticatedError(error);
     return (
       <div className="space-y-6">
         <div>

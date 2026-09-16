@@ -10,6 +10,7 @@ import {
   useDeleteRoute,
 } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
+import { isUnauthenticatedError } from '@/lib/api';
 import type { RouteResponse } from '@/lib/api';
 
 export default function RoutesPage() {
@@ -30,7 +31,7 @@ export default function RoutesPage() {
     deleteMutation.mutate(id);
   };
 
-  const isUnauthenticated = (error as Error)?.message?.includes('401');
+  const isUnauthenticated = isUnauthenticatedError(error);
 
   if (isError) {
     return (

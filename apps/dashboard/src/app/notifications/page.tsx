@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Bell, CheckCheck, MailOpen } from 'lucide-react';
 import Skeleton from '../../components/Skeleton';
 import { ErrorState } from '../../components/error-state';
+import { isUnauthenticatedError } from '../../lib/api';
 import {
   useNotifications,
   useMarkNotificationRead,
@@ -26,7 +27,7 @@ export default function NotificationsPage() {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const unauthenticated = isError && String((error as Error)?.message || '').includes('401');
+  const unauthenticated = isError && isUnauthenticatedError(error);
   const notifications = data?.data ?? [];
 
   return (

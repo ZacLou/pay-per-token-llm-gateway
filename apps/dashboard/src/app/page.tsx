@@ -21,6 +21,7 @@ import {
 import { useAnalytics, useProvider, useTimeSeries } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
 import { resolveGatewayUrl, isSameOriginMode } from '@/lib/gatewayUrl';
+import { isUnauthenticatedError } from '@/lib/api';
 import { format } from 'date-fns';
 
 const GATEWAY_URL = resolveGatewayUrl();
@@ -51,7 +52,7 @@ export default function DashboardPage() {
       : [];
 
   if (error) {
-    const isUnauthenticated = (error as Error).message?.includes('401');
+    const isUnauthenticated = isUnauthenticatedError(error);
     return (
       <div className="space-y-8">
         <div>

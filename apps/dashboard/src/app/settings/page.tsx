@@ -4,6 +4,7 @@ import { Settings, Save, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useProvider, useSaveProvider } from '@/lib/hooks';
 import { ErrorState } from '@/components/error-state';
+import { isUnauthenticatedError } from '@/lib/api';
 
 export default function SettingsPage() {
   const { data: provider, isLoading, isError, error, refetch } = useProvider();
@@ -70,6 +71,11 @@ export default function SettingsPage() {
   }
 
   if (isError) {
+    // Without this the page showed a *red* "Failed to load settings" with the
+    // raw gateway error for a visitor who simply had not signed in — the only
+    // page that did not offer the Connect Wallet state (found by the browser
+    // sweep, which rendered all seven pages signed out).
+    const isUnauthenticated = isUnauthenticatedError(error);
     return (
       <div className="space-y-6">
         <div>
@@ -79,9 +85,14 @@ export default function SettingsPage() {
           </p>
         </div>
         <ErrorState
-          title="Failed to load settings"
-          message={(error as Error).message}
+          title={isUnauthenticated ? 'Authentication required' : 'Failed to load settings'}
+          message={
+            isUnauthenticated
+              ? 'Your session has expired or you are not logged in.'
+              : (error as Error).message
+          }
           onRetry={() => refetch()}
+          unauthenticated={isUnauthenticated}
         />
       </div>
     );
