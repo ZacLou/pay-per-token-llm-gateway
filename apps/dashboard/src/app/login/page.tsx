@@ -6,13 +6,14 @@ import { Wallet, ArrowRight, Shield, Loader2, AlertTriangle } from 'lucide-react
 import { requestChallenge, verifyChallenge, setSessionToken, setWalletAddress } from '@/lib/api';
 import { getDevWalletAddress, isDevModeActive } from '@/lib/devMode';
 
-type WalletType = 'freighter' | 'xbull' | 'albedo';
+type WalletType = 'freighter' | 'xbull';
 
 interface WalletInfo {
   name: string;
   icon: typeof Wallet;
   color: string;
   type: WalletType;
+  installUrl: string;
 }
 
 const wallets: WalletInfo[] = [
@@ -21,18 +22,14 @@ const wallets: WalletInfo[] = [
     icon: Wallet,
     color: 'from-green-500 to-emerald-600',
     type: 'freighter',
+    installUrl: 'https://freighter.app',
   },
   {
     name: 'xBull',
     icon: Shield,
     color: 'from-blue-500 to-purple-600',
     type: 'xbull',
-  },
-  {
-    name: 'Albedo',
-    icon: Wallet,
-    color: 'from-yellow-500 to-orange-600',
-    type: 'albedo',
+    installUrl: 'https://xbull.app',
   },
 ];
 
@@ -47,22 +44,24 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      // Step 1: Get wallet public key from the extension
+      // Step 1: ask the wallet for an address.
       setStep('signing');
-      const address = await getWalletAddress(walletInfo.type);
-      if (!address) {
-        throw new Error(`${walletInfo.name} wallet not found. Please install it and try again.`);
-      }
+      const connector = await createConnector(walletInfo.type);
+      const address = await addressOrDevFallback(walletInfo, () => connector.address());
 
-      // Step 2: Request a challenge from the gateway
+      // Step 2: request a challenge from the gateway
       const { challengeId, challenge } = await requestChallenge(address);
 
-      // Step 3: Sign the challenge with the wallet
-      const signature = await signChallenge(walletInfo.type, address, challenge);
+      // Step 3: sign the challenge with the wallet. Both wallets sign it as a
+      // SEP-53 message, which the gateway verifies (alongside the raw shape the
+      // SDK/CLI signer produces).
+      const signature = await signatureOrDevFallback(address, () =>
+        connector.sign(challenge, address),
+      );
 
       // Step 4: Verify with the gateway.
       // The gateway sets an httpOnly cookie (primary auth) and also returns
-      // the token for in-memory cross-origin fallback (Vercel → localhost).
+      // the token for in-memory cross-origin fallback.
       setStep('verifying');
       const { token } = await verifyChallenge(challengeId, address, signature);
 
@@ -171,103 +170,121 @@ export default function LoginPage() {
   );
 }
 
-// ── Wallet Helpers ───────────────────────────
+// ── Wallet Connectors ────────────────────────
+//
+// Each wallet is reached through its own npm package, imported lazily so the
+// libraries only load when a visitor actually connects:
+//
+//   Freighter → @stellar/freighter-api
+//   xBull     → @creit.tech/xbull-wallet-connect
+//
+// Reading a global instead (`window.freighterApi`, `window.xBullSDK`) does not
+// work for an app built with a bundler, which is what this page used to do — so
+// it never made a single request to the gateway: no package was loaded to
+// define those globals, the detection returned null, and the click ended in
+// "wallet not found". `window.freighterApi` exists only when the library is
+// loaded from a CDN <script> tag, and `window.xBullSDK` only inside the xBull
+// extension's own injected context (the SDK in this repo talks to it).
+//
+// Albedo is absent on purpose: `albedo.signMessage` returns a signature over a
+// message Albedo derives from the public key and the original text (its
+// `signed_message` field, hex), and that derivation is not published anywhere,
+// so the gateway cannot check it. Verifying just the returned signature over
+// the client-supplied bytes would make a captured signature replayable as a
+// login. Adding Albedo needs its derivation, not another button.
+
+interface WalletConnector {
+  /** Resolve the user's address, prompting the wallet if needed. */
+  address(): Promise<string>;
+  /** Sign the challenge; returns a base64 signature. */
+  sign(challenge: string, address: string): Promise<string>;
+}
 
 /**
- * Get the public key from a Stellar browser wallet extension.
- * In production, this uses the wallet's browser API.
- * Falls back to the env-configured development address (NEXT_PUBLIC_DEV_WALLET)
- * when no extension is detected and the dev fallback is armed — see lib/devMode.
+ * Base64 for the byte shapes wallets return. Freighter's `signMessage` is a
+ * base64 string in v4 of its API and a Buffer in v3, so both are handled
+ * without importing Node's Buffer into the browser bundle.
  */
-async function getWalletAddress(type: WalletType): Promise<string | null> {
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** Prompt the wallet, or fall back to dev mode when it is armed. */
+async function addressOrDevFallback(wallet: WalletInfo, connect: () => Promise<string>) {
   try {
-    // Try browser wallet extension APIs
-    if (type === 'freighter' && window.freighterApi) {
-      const pubKey = await window.freighterApi.getPublicKey();
-      return pubKey;
-    }
-
-    if (type === 'xbull' && window.xBullSDK) {
-      const pubKey = await window.xBullSDK.getPublicKey();
-      return pubKey;
-    }
-
-    if (type === 'albedo' && window.albedo) {
-      const pubKey = await window.albedo.publicKey();
-      return pubKey;
-    }
-
-    // Dev fallback: use the env-configured address when no wallet extension
-    // is detected. Armed only in non-production builds or behind the
-    // explicit NEXT_PUBLIC_AUTH_DEV_MODE=true opt-in (Vercel test
-    // deployments), and only when NEXT_PUBLIC_DEV_WALLET is set — fail
-    // closed in production. The gateway also requires AUTH_DEV_MODE=true
-    // to accept the resulting dev signatures.
+    const address = await connect();
+    if (!address) throw new Error(`${wallet.name} did not return an address.`);
+    return address;
+  } catch (err) {
     const devWallet = getDevWalletAddress();
-    if (devWallet) {
-      console.warn(`[x402] No ${type} wallet extension detected. Using dev mode address.`);
+    if (devWallet && isDevModeActive()) {
+      console.warn(
+        `[x402] ${wallet.name} unavailable (${(err as Error).message}). Using the dev-mode address.`,
+      );
       return devWallet;
     }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Sign a challenge string with a Stellar wallet.
- */
-async function signChallenge(
-  type: WalletType,
-  address: string,
-  challenge: string,
-): Promise<string> {
-  try {
-    if (type === 'freighter' && window.freighterApi) {
-      return await window.freighterApi.signMessage(address, challenge);
-    }
-
-    if (type === 'xbull' && window.xBullSDK) {
-      return await window.xBullSDK.signMessage(address, challenge);
-    }
-
-    if (type === 'albedo' && window.albedo) {
-      const result = await window.albedo.signMessage(challenge);
-      return result.signature;
-    }
-
-    // Dev fallback: return a mock signature when no wallet extension is
-    // detected, mirroring the address fallback above. Only armed when the
-    // dev fallback itself is active (fail closed in production).
-    if (isDevModeActive()) {
-      console.warn(`[x402] No ${type} wallet for signing. Using dev mode signature.`);
-      return Buffer.from(`dev-sig-${address}-${Date.now()}`, 'utf-8').toString('base64');
-    }
-
     throw new Error(
-      `No ${type} wallet detected. Please install the ${type} browser extension to sign in.`,
+      `${(err as Error).message} Install ${wallet.name} from ${wallet.installUrl} and reload.`,
     );
-  } catch (err) {
-    throw new Error(`Failed to sign with ${type}: ${(err as Error).message}`);
   }
 }
 
-// ── Wallet API Type Declarations ─────────────
+/** Sign, or produce a dev-mode signature when the fallback is armed. */
+async function signatureOrDevFallback(address: string, sign: () => Promise<string>) {
+  try {
+    const signature = await sign();
+    if (!signature) throw new Error('the wallet did not return a signature');
+    return signature;
+  } catch (err) {
+    if (isDevModeActive()) {
+      console.warn(
+        `[x402] Signing failed (${(err as Error).message}). Using a dev-mode signature.`,
+      );
+      // btoa rather than Buffer: that is the same base64 the gateway's
+      // `dev-sig-` check decodes, without a Node global in the browser bundle.
+      return btoa(`dev-sig-${address}-${Date.now()}`);
+    }
+    throw err;
+  }
+}
 
-declare global {
-  interface Window {
-    freighterApi?: {
-      getPublicKey: () => Promise<string>;
-      signMessage: (address: string, message: string) => Promise<string>;
-    };
-    xBullSDK?: {
-      getPublicKey: () => Promise<string>;
-      signMessage: (address: string, message: string) => Promise<string>;
-    };
-    albedo?: {
-      publicKey: () => Promise<string>;
-      signMessage: (message: string) => Promise<{ signature: string }>;
+async function createConnector(type: WalletType): Promise<WalletConnector> {
+  if (type === 'freighter') {
+    const { isConnected, requestAccess, signMessage } = await import('@stellar/freighter-api');
+
+    return {
+      async address() {
+        const status = await isConnected();
+        if (!status.isConnected) throw new Error('Freighter was not detected in this browser.');
+        const access = await requestAccess();
+        if (access.error) throw new Error(access.error.message);
+        return access.address;
+      },
+      async sign(challenge, address) {
+        const result = await signMessage(challenge, { address });
+        if (result.error) throw new Error(result.error.message);
+        const { signedMessage } = result;
+        if (!signedMessage) throw new Error('Freighter did not sign the challenge.');
+        return typeof signedMessage === 'string' ? signedMessage : toBase64(signedMessage);
+      },
     };
   }
+
+  const { xBullWalletConnect } = await import('@creit.tech/xbull-wallet-connect');
+  // One client per connect attempt: it holds the session the extension
+  // handshakes over, so signing has to go through the same instance.
+  const client = new xBullWalletConnect();
+
+  return {
+    async address() {
+      return client.connect();
+    },
+    async sign(challenge, address) {
+      const { signedMessage } = await client.signMessage(challenge, { address });
+      if (!signedMessage) throw new Error('xBull did not sign the challenge.');
+      return signedMessage;
+    },
+  };
 }
