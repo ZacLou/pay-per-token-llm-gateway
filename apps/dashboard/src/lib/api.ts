@@ -133,7 +133,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(`Gateway error ${res.status}: ${body}`);
   }
 
-  return res.json();
+  // A 2xx with an empty body is a *successful* call with nothing to parse:
+  // DELETE /routes/:id and DELETE /providers/:id both answer `204 No Content`.
+  // Calling `res.json()` on that throws "Unexpected end of JSON input", which
+  // the Routes and Settings pages render as a failed delete for a delete the
+  // gateway actually performed. Found by the dashboard E2E's write-path check.
+  const body = await res.text();
+  if (!body) return undefined as T;
+  return JSON.parse(body) as T;
 }
 
 // ── Auth ────────────────────────────────────

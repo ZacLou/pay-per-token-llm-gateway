@@ -10,6 +10,7 @@ import {
   markAllNotificationsRead,
   fetchPayments,
   fetchEscrowBalance,
+  deleteRoute,
   REQUEST_TIMEOUT_MS,
 } from './api';
 
@@ -163,6 +164,41 @@ describe('gateway request timeout', () => {
     jest.advanceTimersByTime(REQUEST_TIMEOUT_MS);
 
     await expect(pending).rejects.toThrow(/CORS_ORIGINS/);
+  });
+});
+
+describe('empty-body responses', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  it('resolves deleteRoute for the 204 No Content the gateway returns', async () => {
+    // Regression: `request()` ended with `res.json()`, and parsing the empty
+    // body of a 204 rejected with "Unexpected end of JSON input" — so the
+    // Routes page reported a failed delete for a delete that had succeeded.
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: async () => '',
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    }) as unknown as typeof fetch;
+
+    await expect(deleteRoute('route-1')).resolves.toBeUndefined();
+  });
+
+  it('still parses a JSON body', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ unread: 3 }),
+    }) as unknown as typeof fetch;
+
+    await expect(fetchUnreadNotificationCount()).resolves.toEqual({ unread: 3 });
   });
 });
 
