@@ -313,6 +313,28 @@ export function fetchTimeSeries(
   return request<TimeSeriesPoint[]>(`/analytics/timeseries?${qs.toString()}`);
 }
 
+// ── Escrow ───────────────────────────────────
+
+export interface EscrowBalance {
+  address: string;
+  balance: string;
+  asset: string;
+  contractId: string;
+}
+
+/**
+ * Read a wallet's prepaid credit-escrow balance.
+ *
+ * Read-only and permissionless on the gateway — no session is required, so
+ * this works before sign-in. Routed through `BASE` like every other call: a
+ * relative `/api/v1/...` fetch would resolve against the dashboard's own
+ * origin, which serves no API routes, and 404 without ever reaching the
+ * gateway.
+ */
+export function fetchEscrowBalance(address: string): Promise<EscrowBalance> {
+  return request<EscrowBalance>(`/escrow/${encodeURIComponent(address)}/balance`);
+}
+
 // ── Admin / Audit ────────────────────────────
 
 export interface AuditLogEntry {

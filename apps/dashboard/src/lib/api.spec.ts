@@ -9,6 +9,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   fetchPayments,
+  fetchEscrowBalance,
   REQUEST_TIMEOUT_MS,
 } from './api';
 
@@ -162,5 +163,53 @@ describe('gateway request timeout', () => {
     jest.advanceTimersByTime(REQUEST_TIMEOUT_MS);
 
     await expect(pending).rejects.toThrow(/CORS_ORIGINS/);
+  });
+});
+
+describe('escrow API', () => {
+  const originalFetch = global.fetch;
+  const ADDRESS = 'GA5ZSE6VKPVFLEXMWJQBGHE4FJHKQIFSJMLQ7H4VFQB4UHLEH5IOVK3F';
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  function mockJson(body: unknown) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    }) as unknown as typeof fetch;
+  }
+
+  it('reads the balance through the gateway base URL, never a relative path', async () => {
+    // Regression: this page fetched `/api/v1/escrow/...`, a relative URL that
+    // resolved against the dashboard's own origin — which serves no API route
+    // — so the request 404'd without ever reaching the gateway.
+    mockJson({ address: ADDRESS, balance: '1.5000000', asset: 'USDC', contractId: 'CABC' });
+
+    await expect(fetchEscrowBalance(ADDRESS)).resolves.toEqual({
+      address: ADDRESS,
+      balance: '1.5000000',
+      asset: 'USDC',
+      contractId: 'CABC',
+    });
+
+    const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(url.startsWith('http')).toBe(true);
+    expect(url).toContain('/api/v1/escrow/');
+    expect(url).toContain(ADDRESS);
+  });
+
+  it('percent-encodes the address so it cannot escape the path segment', async () => {
+    mockJson({});
+
+    await fetchEscrowBalance('G/../../admin');
+
+    const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(url).not.toContain('G/../..');
+    expect(url).toContain('%2F');
   });
 });

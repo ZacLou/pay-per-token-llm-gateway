@@ -2,13 +2,7 @@
 
 import { useState } from 'react';
 import { Search, Wallet, Loader2, AlertCircle } from 'lucide-react';
-
-interface EscrowBalance {
-  address: string;
-  balance: string;
-  asset: string;
-  contractId: string;
-}
+import { fetchEscrowBalance, type EscrowBalance } from '@/lib/api';
 
 export default function EscrowPage() {
   const [address, setAddress] = useState('');
@@ -25,13 +19,7 @@ export default function EscrowPage() {
     setBalance(null);
 
     try {
-      const res = await fetch(`/api/v1/escrow/${address}/balance`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to fetch balance');
-      }
-      const data = await res.json();
-      setBalance(data);
+      setBalance(await fetchEscrowBalance(address));
     } catch (err) {
       setError((err as Error).message);
     } finally {
