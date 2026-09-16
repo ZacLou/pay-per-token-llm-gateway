@@ -177,6 +177,34 @@ All notable changes to the x402 LLM Gateway project.
   passes, 65,537 fails), oversize rejection, the missing-artifact failure and
   the limit override.
 
+- **The README no longer presents `CORS_ORIGINS` as mandatory for the
+  dashboard.** It said the dashboard "calls the gateway directly from the
+  browser, so two settings are mandatory", listing `NEXT_PUBLIC_GATEWAY_URL` and
+  the gateway's `CORS_ORIGINS`. Only the first is unconditional: with
+  `NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true` — the mode the same README's deployment
+  guide recommends — the browser calls `/api/v1/*` on the dashboard's own origin
+  and the rewrite proxies it server-to-server, so no request crosses an origin
+  and the dashboard does not need to be listed in `CORS_ORIGINS`. Following the
+  README literally meant editing a gateway variable to fix a symptom the
+  dashboard did not have. The two behaviours are now stated as the modes they
+  are, including why the cookie's first-party or third-party nature follows from
+  the same flag.
+
+### Added
+
+- **`pnpm vercel:git-link-check` — one command for the diagnosis that otherwise
+  takes an afternoon.** `scripts/vercel-git-link-check.sh` reports whether the
+  Vercel project's Git link can still read the repository (§2.5): it compares
+  `link.repoOwnerId` with the repository's current `owner.id` from GitHub,
+  checks the repo id, and reports the age of the newest `source: git`
+  deployment, exiting non-zero — with the two fix steps — when the link cannot
+  be trusted. It distinguishes the harmless case (a rename: same owner id, stale
+  name → warning) from the fatal one (a transfer: different owner id), which is
+  the distinction that cost the investigation. `GITHUB_TOKEN` is needed only for
+  a private repository, and `EVIDENCE_OUT` writes the JSON report. Unlike the
+  production smoke check it has no default evidence file, so running it never
+  dirties the working tree.
+
 ---
 
 ## [Unreleased] — 2026-09-13

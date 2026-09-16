@@ -747,8 +747,8 @@ root; there is no repository-root `vercel.json`).
 vercel --prod --yes
 ```
 
-The dashboard calls the gateway **directly from the browser**, so two settings
-are mandatory and both are easy to get wrong:
+Two build-time values decide how the browser reaches the gateway, and the second
+one is what determines whether CORS applies at all:
 
 1. **`NEXT_PUBLIC_GATEWAY_URL` must be set in the Vercel project's environment
    variables and must be reachable from the public internet.** `NEXT_PUBLIC_*`
@@ -756,12 +756,24 @@ are mandatory and both are easy to get wrong:
    deployment does not pick up a change until it is rebuilt. It must be a URL a
    _browser_ can reach — a GitHub Codespaces port URL, a `localhost` address, or
    an in-cluster service name will all fail in production.
-2. **The gateway's `CORS_ORIGINS` must include the dashboard's origin**
-   (e.g. `https://your-dashboard.vercel.app`), or the browser blocks the
-   responses.
+2. **`NEXT_PUBLIC_GATEWAY_SAME_ORIGIN=true` (recommended) decides whether the
+   gateway's `CORS_ORIGINS` matters to the dashboard.** With it on, the page
+   calls `/api/v1/*` on its **own** origin and the rewrite in
+   `apps/dashboard/next.config.js` proxies that to `NEXT_PUBLIC_GATEWAY_URL`
+   server-to-server — no browser request crosses an origin, so the dashboard
+   does **not** need to be listed in `CORS_ORIGINS`, and the session cookie the
+   gateway sets belongs to the dashboard's host, so it is **first-party**.
+   Leave the flag off and the browser calls the gateway's origin directly, which
+   makes `CORS_ORIGINS` **mandatory** — it must include the dashboard's origin
+   (e.g. `https://your-dashboard.vercel.app`) or the browser blocks every
+   response — and makes the session cookie third-party, so Safari's ITP and
+   Chrome's third-party-cookie limits may drop it and sign-in will not stick.
+   Set `CORS_ORIGINS` regardless for any _other_ browser client that calls the
+   gateway directly (see [DEPLOYMENT.md](./DEPLOYMENT.md) §2.3).
 
-If `NEXT_PUBLIC_GATEWAY_URL` is missing from a production build, the dashboard
-now fails closed and says so — it does **not** silently fall back to
+If `NEXT_PUBLIC_GATEWAY_URL` is missing from a production build — or the
+same-origin flag is on without it, since the rewrite would then have no target —
+the dashboard fails closed and says so: it does **not** silently fall back to
 `http://localhost:3000` (see `apps/dashboard/src/lib/gatewayUrl.ts` for why that
 fallback was both a bug and invisible in `next build` output). Verify a build
 before deploying:
